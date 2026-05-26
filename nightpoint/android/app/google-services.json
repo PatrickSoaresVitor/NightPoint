@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "708333523189",
+    "project_id": "nightpoint-cdc0d",
+    "storage_bucket": "nightpoint-cdc0d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:708333523189:android:aa41a52406cc8c38a235bc",
+        "android_client_info": {
+          "package_name": "com.example.nightpoint"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC--WrT_2WgOZib5n4ZWJW4zQO8HSkQlJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
