@@ -1,9 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../widgets/custom_card.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../event_details/event_details_screen.dart';
+import '../edit_event/edit_event_screen.dart';
 
 class EventsScreen extends StatelessWidget {
   const EventsScreen({super.key});
@@ -12,40 +16,128 @@ class EventsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         title: const Text('Eventos'),
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: ListView(
-          children: const [
-            EventCard(
-              title: 'Night Meet Franca',
-              location: 'Posto GT',
-              time: 'Hoje • 22:30',
-              category: 'Street',
-            ),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Erro ao carregar eventos.',
+                  style: AppTextStyles.subtitle,
+                ),
+              );
+            }
 
-            SizedBox(height: 16),
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return ListView.separated(
+                itemCount: 3,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: 16),
+                itemBuilder: (_, __) {
+                  return CustomCard(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
 
-            EventCard(
-              title: 'Euro Night',
-              location: 'Av. Champagnat',
-              time: 'Sábado • 21:00',
-              category: 'Premium',
-            ),
+                        Container(
+                          width: 80,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius:
+                                BorderRadius.circular(8),
+                          ),
+                        ),
 
-            SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
-            EventCard(
-              title: 'JDM Point',
-              location: 'Shopping',
-              time: 'Domingo • 20:00',
-              category: 'JDM',
-            ),
-          ],
+                        Container(
+                          width: 180,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius:
+                                BorderRadius.circular(8),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Container(
+                          width: double.infinity,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius:
+                                BorderRadius.circular(8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+
+            if (docs.isEmpty) {
+              return Center(
+                child: Text(
+                  'Nenhum evento publicado ainda.',
+                  style: AppTextStyles.subtitle,
+                ),
+              );
+            }
+
+            return ListView.separated(
+              itemCount: docs.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final data = docs[index].data() as Map<String, dynamic>;
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                final isOwner = data['createdBy'] == currentUserId;
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EventDetailsScreen(
+                          title: data['title'] ?? 'Sem título',
+                          location: data['location'] ?? 'Local não informado',
+                          time: data['time'] ?? 'Horário não informado',
+                          category: data['category'] ?? 'Evento',
+                          description: data['description'] ?? '',
+                          latitude: data['latitude'],
+                          longitude: data['longitude'],
+                          eventId: docs[index].id,
+                        ),
+                      ),
+                    );
+                  },
+                  child: EventCard(
+                    id: docs[index].id,
+                    title: data['title'] ?? 'Sem título',
+                    location: data['location'] ?? 'Local não informado',
+                    time: data['time'] ?? 'Horário não informado',
+                    category: data['category'] ?? 'Evento',
+                    description: data['description'] ?? '',
+                    isOwner: isOwner,
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
     );
@@ -57,6 +149,9 @@ class EventCard extends StatelessWidget {
   final String location;
   final String time;
   final String category;
+  final String description;
+  final String id;
+  final bool isOwner;
 
   const EventCard({
     super.key,
@@ -64,6 +159,9 @@ class EventCard extends StatelessWidget {
     required this.location,
     required this.time,
     required this.category,
+    required this.description,
+    required this.id,
+    required this.isOwner,
   });
 
   @override
@@ -80,16 +178,12 @@ class EventCard extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-
           const SizedBox(height: 8),
-
           Text(
             title,
             style: AppTextStyles.title.copyWith(fontSize: 24),
           ),
-
           const SizedBox(height: 12),
-
           Row(
             children: [
               const Icon(
@@ -101,9 +195,7 @@ class EventCard extends StatelessWidget {
               Text(location, style: AppTextStyles.subtitle),
             ],
           ),
-
           const SizedBox(height: 8),
-
           Row(
             children: [
               const Icon(
@@ -115,6 +207,97 @@ class EventCard extends StatelessWidget {
               Text(time, style: AppTextStyles.subtitle),
             ],
           ),
+          
+          const SizedBox(height: 12),
+
+          if (description.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              description,
+              style: AppTextStyles.subtitle,
+            ),
+          ],
+          const SizedBox(height: 12),
+
+          if (isOwner) ...[
+            const SizedBox(height: 12),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditEventScreen(
+                          eventId: id,
+                          eventData: {
+                            'title': title,
+                            'location': location,
+                            'time': time,
+                            'description': description,
+                            'category': category,
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.edit,
+                    color: AppColors.primary,
+                  ),
+                ),
+
+                IconButton(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          backgroundColor: AppColors.surface,
+                          title: const Text('Excluir encontro'),
+                          content: const Text(
+                            'Tem certeza que deseja excluir este encontro?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context, false);
+                              },
+                              child: const Text('Cancelar'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context, true);
+                              },
+                              child: const Text(
+                                'Excluir',
+                                style: TextStyle(
+                                  color: AppColors.danger,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (confirm != true) return;
+
+                    await FirebaseFirestore.instance
+                        .collection('events')
+                        .doc(id)
+                        .delete();
+                  },
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.danger,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

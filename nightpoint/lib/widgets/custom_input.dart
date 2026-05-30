@@ -7,17 +7,23 @@ class CustomInput extends StatelessWidget {
   final String hint;
   final IconData? icon;
   final int maxLines;
+  final bool obscureText;
+  final TextEditingController? controller;
 
   const CustomInput({
     super.key,
     required this.hint,
     this.icon,
     this.maxLines = 1,
+    this.obscureText = false,
+    this.controller,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
+      obscureText: obscureText,
       maxLines: maxLines,
       style: const TextStyle(
         color: AppColors.textPrimary,

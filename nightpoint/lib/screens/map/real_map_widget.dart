@@ -7,11 +7,13 @@ import '../../core/theme/app_colors.dart';
 class RealMapWidget extends StatelessWidget {
   final double latitude;
   final double longitude;
+  final List<Map<String, dynamic>> events;
 
   const RealMapWidget({
     super.key,
     required this.latitude,
     required this.longitude,
+    this.events = const [],
   });
 
   @override
@@ -19,13 +21,14 @@ class RealMapWidget extends StatelessWidget {
     return FlutterMap(
       options: MapOptions(
         initialCenter: LatLng(latitude, longitude),
-        initialZoom: 15,
+        initialZoom: 14,
       ),
       children: [
         TileLayer(
           urlTemplate: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.nightpoint.app',
         ),
+
         MarkerLayer(
           markers: [
             Marker(
@@ -38,6 +41,28 @@ class RealMapWidget extends StatelessWidget {
                 size: 40,
               ),
             ),
+
+            ...events
+                .where(
+                  (event) =>
+                      event['latitude'] != null &&
+                      event['longitude'] != null,
+                )
+                .map(
+                  (event) => Marker(
+                    point: LatLng(
+                      event['latitude'],
+                      event['longitude'],
+                    ),
+                    width: 80,
+                    height: 80,
+                    child: const Icon(
+                      Icons.location_on,
+                      color: AppColors.accent,
+                      size: 42,
+                    ),
+                  ),
+                ),
           ],
         ),
       ],
