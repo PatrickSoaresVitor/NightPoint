@@ -1,16 +1,15 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
-
 import '../../services/auth_service.dart';
-
 import '../../utils/app_snackbar.dart';
-
 import '../../widgets/custom_card.dart';
-
 import '../auth/login_screen.dart';
+import '../my_events/my_events_screen.dart';
+import '../../services/user_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -18,79 +17,122 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
+    final user = authService.currentUser;
+    final userService = UserService();
 
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         title: const Text('Perfil'),
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-
         child: ListView(
           children: [
-
             CustomCard(
               child: Column(
                 children: [
+                  StreamBuilder(
+                    stream: userService.getCurrentUserProfile(),
+                    builder: (context, snapshot) {
+                      final data = snapshot.data?.data();
+                      final nickname = data?['nickname'] ?? 'Usuário';
 
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundColor: AppColors.surface,
-                    child: Text(
-                      authService.currentUser?.email
-                              ?.substring(0, 1)
-                              .toUpperCase() ??
-                          'U',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
+                      return Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 48,
+                            backgroundColor: AppColors.surface,
+                            child: Text(
+                              nickname.toString().substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
 
-                  const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                  Text(
-                    authService.currentUser?.email ?? 'Usuário',
-                    style: AppTextStyles.title.copyWith(
-                      fontSize: 26,
-                    ),
-                  ),
+                          Text(
+                            nickname.toString(),
+                            style: AppTextStyles.title.copyWith(
+                              fontSize: 26,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
 
-                  const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                  Text(
-                    'Conta autenticada no Firebase',
-                    style: AppTextStyles.subtitle,
+                          Text(
+                            user?.email ?? 'E-mail não informado',
+                            style: AppTextStyles.subtitle,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 20),
 
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceAround,
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('events')
+                        .where('createdBy', isEqualTo: user?.uid)
+                        .snapshots(),
+                    builder: (context, createdSnapshot) {
+                      final eventsCount =
+                          createdSnapshot.data?.docs.length ?? 0;
 
-                    children: const [
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('events')
+                            .where(
+                              'participants',
+                              arrayContains: user?.uid,
+                            )
+                            .snapshots(),
+                        builder: (context, participatingSnapshot) {
+                          final participatingCount =
+                              participatingSnapshot.data?.docs.length ?? 0;
 
-                      ProfileStat(
-                        label: 'Eventos',
-                        value: '8',
-                      ),
+                          return StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('events')
+                                .where(
+                                  'likes',
+                                  arrayContains: user?.uid,
+                                )
+                                .snapshots(),
+                            builder: (context, likesSnapshot) {
+                              final likesCount =
+                                  likesSnapshot.data?.docs.length ?? 0;
 
-                      ProfileStat(
-                        label: 'Conexões',
-                        value: '24',
-                      ),
-
-                      ProfileStat(
-                        label: 'Garagem',
-                        value: '1',
-                      ),
-                    ],
+                              return Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
+                                children: [
+                                  ProfileStat(
+                                    label: 'Criados',
+                                    value: eventsCount.toString(),
+                                  ),
+                                  ProfileStat(
+                                    label: 'Participando',
+                                    value: participatingCount.toString(),
+                                  ),
+                                  ProfileStat(
+                                    label: 'Curtidos',
+                                    value: likesCount.toString(),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -100,11 +142,8 @@ class ProfileScreen extends StatelessWidget {
 
             CustomCard(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   Text(
                     'Badges',
                     style: AppTextStyles.title.copyWith(
@@ -117,20 +156,10 @@ class ProfileScreen extends StatelessWidget {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-
                     children: const [
-
-                      BadgeChip(
-                        text: 'Founder',
-                      ),
-
-                      BadgeChip(
-                        text: 'Street Member',
-                      ),
-
-                      BadgeChip(
-                        text: 'Night Crew',
-                      ),
+                      BadgeChip(text: 'Founder'),
+                      BadgeChip(text: 'Street Member'),
+                      BadgeChip(text: 'Night Crew'),
                     ],
                   ),
                 ],
@@ -142,11 +171,36 @@ class ProfileScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               height: 56,
-
               child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyEventsScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.event_note),
+                label: const Text('Meus Eventos'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(
+                    color: AppColors.primary,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+              ),
+            ),
 
+            const SizedBox(height: 16),
+
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: OutlinedButton.icon(
                 onPressed: () async {
-
                   await authService.logout();
 
                   if (!context.mounted) return;
@@ -159,28 +213,19 @@ class ProfileScreen extends StatelessWidget {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const LoginScreen(),
+                      builder: (_) => const LoginScreen(),
                     ),
                   );
                 },
-
                 icon: const Icon(Icons.logout),
-
-                label: const Text(
-                  'Sair da conta',
-                ),
-
+                label: const Text('Sair da conta'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.danger,
-
                   side: const BorderSide(
                     color: AppColors.danger,
                   ),
-
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
               ),
@@ -204,21 +249,16 @@ class ProfileStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Column(
       children: [
-
         Text(
           value,
-
           style: AppTextStyles.title.copyWith(
             fontSize: 24,
             color: AppColors.primary,
           ),
         ),
-
         const SizedBox(height: 4),
-
         Text(
           label,
           style: AppTextStyles.subtitle,
@@ -238,18 +278,13 @@ class BadgeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Chip(
-
       label: Text(text),
-
       backgroundColor: AppColors.surface,
-
       labelStyle: const TextStyle(
         color: AppColors.textPrimary,
         fontWeight: FontWeight.bold,
       ),
-
       side: const BorderSide(
         color: AppColors.border,
       ),

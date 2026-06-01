@@ -49,7 +49,7 @@ class EventsScreen extends StatelessWidget {
                       children: [
 
                         Container(
-                          width: 80,
+                          width: 80,  
                           height: 14,
                           decoration: BoxDecoration(
                             color: AppColors.surface,
@@ -106,6 +106,15 @@ class EventsScreen extends StatelessWidget {
                 final data = docs[index].data() as Map<String, dynamic>;
                 final currentUserId = FirebaseAuth.instance.currentUser?.uid;
                 final isOwner = data['createdBy'] == currentUserId;
+                final participants = List<String>.from(
+                  data['participants'] ?? [],
+                );
+                final likes = List<String>.from(
+                  data['likes'] ?? [],
+                );
+                final isLiked = currentUserId != null && likes.contains(currentUserId);
+                final isParticipating =
+                  currentUserId != null && participants.contains(currentUserId);
 
                 return GestureDetector(
                   onTap: () {
@@ -121,6 +130,8 @@ class EventsScreen extends StatelessWidget {
                           latitude: data['latitude'],
                           longitude: data['longitude'],
                           eventId: docs[index].id,
+                          creatorEmail: data['creatorEmail'] ?? 'Criador não informado',
+                          
                         ),
                       ),
                     );
@@ -133,6 +144,10 @@ class EventsScreen extends StatelessWidget {
                     category: data['category'] ?? 'Evento',
                     description: data['description'] ?? '',
                     isOwner: isOwner,
+                    participantsCount: participants.length,
+                    likesCount: likes.length,
+                    isLiked: isLiked,
+                    isParticipating: isParticipating,
                   ),
                 );
               },
@@ -152,6 +167,11 @@ class EventCard extends StatelessWidget {
   final String description;
   final String id;
   final bool isOwner;
+  final int participantsCount;
+  final int likesCount;
+  final bool isLiked;
+  final bool isParticipating;
+  
 
   const EventCard({
     super.key,
@@ -162,6 +182,10 @@ class EventCard extends StatelessWidget {
     required this.description,
     required this.id,
     required this.isOwner,
+    required this.participantsCount,
+    required this.likesCount,
+    required this.isLiked,
+    required this.isParticipating,
   });
 
   @override
@@ -208,7 +232,41 @@ class EventCard extends StatelessWidget {
             ],
           ),
           
-          const SizedBox(height: 12),
+          const SizedBox(height: 8), 
+          Row(
+            children: [
+              Icon(
+                isParticipating ? Icons.check_circle : Icons.groups,
+                color: isParticipating
+                    ? AppColors.accent
+                    : AppColors.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isParticipating
+                    ? '$participantsCount participante(s) • Você vai'
+                    : '$participantsCount participante(s)',
+                style: AppTextStyles.subtitle,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                isLiked ? Icons.favorite : Icons.favorite_border,
+                color: AppColors.danger,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$likesCount curtida(s)',
+                style: AppTextStyles.subtitle,
+              ),
+            ],
+          ),
 
           if (description.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -217,6 +275,8 @@ class EventCard extends StatelessWidget {
               style: AppTextStyles.subtitle,
             ),
           ],
+          
+
           const SizedBox(height: 12),
 
           if (isOwner) ...[

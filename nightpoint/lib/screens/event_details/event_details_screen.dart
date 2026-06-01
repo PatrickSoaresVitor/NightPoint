@@ -8,6 +8,8 @@ import '../map/real_map_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/event_comments.dart';
+
 
 
 class EventDetailsScreen extends StatelessWidget {
@@ -19,6 +21,7 @@ class EventDetailsScreen extends StatelessWidget {
   final double? latitude;
   final double? longitude;
   final String eventId;
+  final String creatorEmail;
   
   Future<void> openInGoogleMaps() async {
     if (latitude == null || longitude == null) return;
@@ -47,6 +50,7 @@ class EventDetailsScreen extends StatelessWidget {
     this.latitude,
     this.longitude,
     required this.eventId,
+    required this.creatorEmail,
   });
 
   @override
@@ -142,6 +146,26 @@ class EventDetailsScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
+            CustomCard(
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.person,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Criado por: $creatorEmail',
+                      style: AppTextStyles.subtitle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             if (latitude != null && longitude != null)
               CustomCard(
                 child: Column(
@@ -219,51 +243,138 @@ class EventDetailsScreen extends StatelessWidget {
                     final isParticipating =
                         userId != null && participants.contains(userId);
 
-                    return SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: userId == null
-                            ? null
-                            : () async {
-                                final ref = FirebaseFirestore.instance
-                                    .collection('events')
-                                    .doc(eventId);
+                    final likes = List<String>.from(
+                      data?['likes'] ?? [],
+                    );
 
-                                if (isParticipating) {
-                                  await ref.update({
-                                    'participants': FieldValue.arrayRemove([userId]),
-                                  });
-                                } else {
-                                  await ref.update({
-                                    'participants': FieldValue.arrayUnion([userId]),
-                                  });
-                                }
-                              },
-                        icon: Icon(
-                          isParticipating
-                              ? Icons.check_circle
-                              : Icons.group_add,
-                        ),
-                        label: Text(
-                          isParticipating
-                              ? 'Participando'
-                              : 'Participar do Encontro',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isParticipating
-                              ? AppColors.accent
-                              : AppColors.primary,
-                          foregroundColor: AppColors.background,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                    final isLiked =
+                        userId != null && likes.contains(userId);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CustomCard(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.groups,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${participants.length} participante(s)',
+                                style: AppTextStyles.subtitle,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+
+                         const SizedBox(height: 16),
+
+                        CustomCard(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.favorite,
+                                color: AppColors.danger,
+                              ),
+
+                              const SizedBox(width: 8),
+
+                              Text(
+                                '${likes.length} curtida(s)',
+                                style: AppTextStyles.subtitle,
+                              ),
+
+                              const Spacer(),
+
+                              IconButton(
+                                onPressed: userId == null
+                                    ? null
+                                    : () async {
+                                        final ref = FirebaseFirestore.instance
+                                            .collection('events')
+                                            .doc(eventId);
+
+                                        if (isLiked) {
+                                          await ref.update({
+                                            'likes': FieldValue.arrayRemove([userId]),
+                                          });
+                                        } else {
+                                          await ref.update({
+                                            'likes': FieldValue.arrayUnion([userId]),
+                                          });
+                                        }
+                                      },
+                                icon: Icon(
+                                  isLiked
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: AppColors.danger,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        const SizedBox(height: 16),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton.icon(
+                            onPressed: userId == null
+                                ? null
+                                : () async {
+                                    final ref = FirebaseFirestore.instance
+                                        .collection('events')
+                                        .doc(eventId);
+
+                                    if (isParticipating) {
+                                      await ref.update({
+                                        'participants': FieldValue.arrayRemove([userId]),
+                                      });
+                                    } else {
+                                      await ref.update({
+                                        'participants': FieldValue.arrayUnion([userId]),
+                                      });
+                                    }
+                                  },
+                            icon: Icon(
+                              isParticipating
+                                  ? Icons.check_circle
+                                  : Icons.group_add,
+                            ),
+                            
+
+                            label: Text(
+                              isParticipating
+                                  ? 'Participando'
+                                  : 'Participar do Encontro',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isParticipating
+                                  ? AppColors.accent
+                                  : AppColors.primary,
+                              foregroundColor: AppColors.background,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                        EventComments(
+                          eventId: eventId,
+                        ),
+                      ],
                     );
                   },
                 ),
           ],
+          
         ),
       ),
     );

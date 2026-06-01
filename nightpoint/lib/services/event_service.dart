@@ -30,6 +30,7 @@ class EventService {
       'longitude': longitude,
       'createdBy': user.uid,
       'createdAt': FieldValue.serverTimestamp(),
+      'creatorEmail': user.email,
     });
   }
 }
