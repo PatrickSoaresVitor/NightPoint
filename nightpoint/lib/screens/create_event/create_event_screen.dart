@@ -11,7 +11,14 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_input.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
+  final double? initialLatitude;
+  final double? initialLongitude;
+
+  const CreateEventScreen({
+    super.key,
+    this.initialLatitude,
+    this.initialLongitude,
+  });
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -32,6 +39,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   double? latitude;
   double? longitude;
+
+  @override
+  void initState() {
+    super.initState();
+
+    latitude = widget.initialLatitude;
+    longitude = widget.initialLongitude;
+  }
 
   Future<void> getEventLocation() async {
     try {
@@ -177,11 +192,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     locationController.dispose();
     timeController.dispose();
     descriptionController.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasLocation = latitude != null && longitude != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -230,9 +248,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             const SizedBox(height: 16),
 
             OutlinedButton.icon(
-              onPressed: isGeneratingDescription
-                  ? null
-                  : generateDescriptionWithAI,
+              onPressed:
+                  isGeneratingDescription ? null : generateDescriptionWithAI,
               icon: const Icon(Icons.auto_awesome),
               label: Text(
                 isGeneratingDescription
@@ -303,16 +320,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
             OutlinedButton.icon(
               onPressed: getEventLocation,
-              icon: const Icon(Icons.my_location),
+              icon: Icon(
+                hasLocation ? Icons.check_circle : Icons.my_location,
+              ),
               label: Text(
-                latitude == null
-                    ? 'Usar localização atual'
-                    : 'Localização capturada',
+                hasLocation
+                    ? 'Localização capturada'
+                    : 'Usar localização atual',
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(
-                  color: AppColors.primary,
+                foregroundColor:
+                    hasLocation ? AppColors.accent : AppColors.primary,
+                side: BorderSide(
+                  color: hasLocation ? AppColors.accent : AppColors.primary,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),

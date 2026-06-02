@@ -198,7 +198,10 @@ class _MapScreenState extends State<MapScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const CreateEventScreen(),
+                                builder: (_) => CreateEventScreen(
+                                  initialLatitude: latitude,
+                                  initialLongitude: longitude,
+                                ),
                               ),
                             );
                           },
