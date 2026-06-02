@@ -10,6 +10,7 @@ class RealMapWidget extends StatefulWidget {
   final double longitude;
   final List<Map<String, dynamic>> events;
   final int recenterTrigger;
+  final bool showUserMarker;
 
   const RealMapWidget({
     super.key,
@@ -17,6 +18,7 @@ class RealMapWidget extends StatefulWidget {
     required this.longitude,
     this.events = const [],
     this.recenterTrigger = 0,
+    this.showUserMarker = true,
   });
 
   @override
@@ -77,22 +79,23 @@ class _RealMapWidgetState extends State<RealMapWidget> {
             MarkerLayer(
               markers: [
                 // Marcador do usuário
-                Marker(
-                  point: LatLng(
-                    widget.latitude,
-                    widget.longitude,
-                  ),
-                  width: 60,
-                  height: 60,
-                  child: Transform.rotate(
-                    angle: 0.8,
-                    child: const Icon(
-                      Icons.navigation,
-                      color: AppColors.primary,
-                      size: 38,
+                if (widget.showUserMarker)
+                  Marker(
+                    point: LatLng(
+                      widget.latitude,
+                      widget.longitude,
+                    ),
+                    width: 60,
+                    height: 60,
+                    child: Transform.rotate(
+                      angle: 0.8,
+                      child: const Icon(
+                        Icons.navigation,
+                        color: AppColors.primary,
+                        size: 38,
+                      ),
                     ),
                   ),
-                ),
 
                 // Marcadores dos eventos
                 ...widget.events

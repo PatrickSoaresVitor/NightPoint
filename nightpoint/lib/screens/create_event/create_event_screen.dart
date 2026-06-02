@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -9,8 +10,6 @@ import '../../services/location_service.dart';
 import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_input.dart';
-import 'package:latlong2/latlong.dart';
-
 import '../location_picker/location_picker_screen.dart';
 
 class CreateEventScreen extends StatefulWidget {
@@ -28,6 +27,7 @@ class CreateEventScreen extends StatefulWidget {
 }
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
+  final ideaController = TextEditingController();
   final titleController = TextEditingController();
   final locationController = TextEditingController();
   final timeController = TextEditingController();
@@ -37,8 +37,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final aiService = AiService();
 
   String category = 'Street';
+
   bool isLoading = false;
   bool isGeneratingDescription = false;
+  bool isGeneratingCompleteEvent = false;
 
   double? latitude;
   double? longitude;
@@ -71,6 +73,97 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         context,
         e.toString(),
       );
+    }
+  }
+
+  Future<void> chooseLocationOnMap() async {
+    final initialLat = latitude ?? widget.initialLatitude;
+    final initialLng = longitude ?? widget.initialLongitude;
+
+    if (initialLat == null || initialLng == null) {
+      AppSnackbar.show(
+        context,
+        'Aguarde a localização inicial carregar no mapa.',
+      );
+
+      return;
+    }
+
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLatitude: initialLat,
+          initialLongitude: initialLng,
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      latitude = result.latitude;
+      longitude = result.longitude;
+    });
+
+    AppSnackbar.show(
+      context,
+      'Local do encontro selecionado no mapa!',
+    );
+  }
+
+  Future<void> generateCompleteEventWithAI() async {
+    if (ideaController.text.trim().isEmpty) {
+      AppSnackbar.show(
+        context,
+        'Digite uma ideia para a IA preencher o evento.',
+      );
+
+      return;
+    }
+
+    try {
+      setState(() {
+        isGeneratingCompleteEvent = true;
+      });
+
+      final generatedEvent = await aiService.generateCompleteEvent(
+        idea: ideaController.text.trim(),
+      );
+
+      setState(() {
+        titleController.text = generatedEvent['title'] ?? '';
+        locationController.text = generatedEvent['location'] ?? '';
+        timeController.text = generatedEvent['time'] ?? '';
+        descriptionController.text = generatedEvent['description'] ?? '';
+
+        final generatedCategory = generatedEvent['category'] ?? 'Street';
+
+        if (['Street', 'JDM', 'Premium', 'Drift']
+            .contains(generatedCategory)) {
+          category = generatedCategory;
+        } else {
+          category = 'Street';
+        }
+      });
+
+      if (!mounted) return;
+
+      AppSnackbar.show(
+        context,
+        'Evento preenchido com IA!',
+      );
+    } catch (e) {
+      AppSnackbar.show(
+        context,
+        e.toString(),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isGeneratingCompleteEvent = false;
+        });
+      }
     }
   }
 
@@ -120,40 +213,50 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
-  Future<void> chooseLocationOnMap() async {
-    final initialLat = latitude ?? widget.initialLatitude;
-    final initialLng = longitude ?? widget.initialLongitude;
+  Future<bool> confirmSafetyAnalysis(String analysis) async {
+    final lowerAnalysis = analysis.toLowerCase();
 
-    if (initialLat == null || initialLng == null) {
-      AppSnackbar.show(
-        context,
-        'Aguarde a localização inicial carregar no mapa.',
-      );
+    final isWarning = lowerAnalysis.contains('atenção') ||
+        lowerAnalysis.contains('inadequado');
 
-      return;
+    if (!isWarning) {
+      return true;
     }
 
-    final result = await Navigator.push<LatLng>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(
-          initialLatitude: initialLat,
-          initialLongitude: initialLng,
-        ),
-      ),
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('Atenção na publicação'),
+          content: Text(
+            analysis,
+            style: AppTextStyles.subtitle,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('Voltar e editar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text(
+                'Continuar mesmo assim',
+                style: TextStyle(
+                  color: AppColors.danger,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
-    if (result == null) return;
-
-    setState(() {
-      latitude = result.latitude;
-      longitude = result.longitude;
-    });
-
-    AppSnackbar.show(
-      context,
-      'Local do encontro selecionado no mapa!',
-    );
+    return result == true;
   }
 
   Future<void> saveEvent() async {
@@ -171,7 +274,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (latitude == null || longitude == null) {
       AppSnackbar.show(
         context,
-        'Capture a localização antes de publicar.',
+        'Escolha o local do encontro antes de publicar.',
       );
 
       return;
@@ -181,6 +284,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       setState(() {
         isLoading = true;
       });
+
+      final safetyAnalysis = await aiService.analyzeEventSafety(
+        title: titleController.text.trim(),
+        location: locationController.text.trim(),
+        time: timeController.text.trim(),
+        category: category,
+        description: descriptionController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      final canContinue = await confirmSafetyAnalysis(safetyAnalysis);
+
+      if (!canContinue) {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+
+        return;
+      }
 
       await eventService.createEvent(
         title: titleController.text.trim(),
@@ -199,6 +324,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'Encontro publicado com sucesso!',
       );
 
+      ideaController.clear();
       titleController.clear();
       locationController.clear();
       timeController.clear();
@@ -227,6 +353,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   void dispose() {
+    ideaController.dispose();
     titleController.dispose();
     locationController.dispose();
     timeController.dispose();
@@ -258,6 +385,38 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             Text(
               'Organize um rolê automotivo na sua região.',
               style: AppTextStyles.subtitle,
+            ),
+
+            const SizedBox(height: 24),
+
+            CustomInput(
+              hint: 'Ideia do evento',
+              icon: Icons.lightbulb,
+              controller: ideaController,
+              maxLines: 3,
+            ),
+
+            const SizedBox(height: 16),
+
+            OutlinedButton.icon(
+              onPressed: isGeneratingCompleteEvent
+                  ? null
+                  : generateCompleteEventWithAI,
+              icon: const Icon(Icons.auto_awesome),
+              label: Text(
+                isGeneratingCompleteEvent
+                    ? 'Preenchendo evento...'
+                    : 'Preencher evento com IA',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.secondary,
+                side: const BorderSide(
+                  color: AppColors.secondary,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
             ),
 
             const SizedBox(height: 24),
@@ -378,10 +537,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 24),
 
             CustomButton(
-              text: isLoading ? 'Publicando...' : 'Publicar Encontro',
+              text: isLoading
+                  ? 'Analisando e publicando...'
+                  : 'Publicar Encontro',
               icon: Icons.rocket_launch,
               onPressed: isLoading ? () {} : saveEvent,
             ),
@@ -390,4 +552,5 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       ),
     );
   }
+  
 }
