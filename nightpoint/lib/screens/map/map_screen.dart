@@ -1,12 +1,13 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../services/location_service.dart';
 import '../../utils/app_snackbar.dart';
-import '../../widgets/custom_card.dart';
 import '../create_event/create_event_screen.dart';
 import 'real_map_widget.dart';
 
@@ -21,184 +22,240 @@ class _MapScreenState extends State<MapScreen> {
   double? latitude;
   double? longitude;
 
-  Future<void> _getLocation() async {
-    try {
-      final position = await LocationService.getCurrentPosition();
+  bool isLoadingLocation = true;
 
+  StreamSubscription<Position>? positionSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLocationTracking();
+  }
+
+  Future<void> _startLocationTracking() async {
+    try {
       setState(() {
-        latitude = position.latitude;
-        longitude = position.longitude;
+        isLoadingLocation = true;
       });
 
+      await positionSubscription?.cancel();
+
+      positionSubscription = LocationService.getPositionStream().listen(
+        (position) {
+          if (!mounted) return;
+
+          setState(() {
+            latitude = position.latitude;
+            longitude = position.longitude;
+            isLoadingLocation = false;
+          });
+        },
+        onError: (error) {
+          if (!mounted) return;
+
+          setState(() {
+            isLoadingLocation = false;
+          });
+
+          AppSnackbar.show(
+            context,
+            error.toString(),
+          );
+        },
+      );
+    } catch (e) {
       if (!mounted) return;
+
+      setState(() {
+        isLoadingLocation = false;
+      });
 
       AppSnackbar.show(
         context,
-        'Localização capturada com sucesso!',
+        e.toString(),
       );
-    } catch (e) {
-      AppSnackbar.show(context, e.toString());
     }
+  }
+
+  @override
+  void dispose() {
+    positionSubscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('NightPoint')),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('events')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            final docs = snapshot.data?.docs ?? [];
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('events')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final docs = snapshot.data?.docs ?? [];
 
-            final events = docs
-                .map((doc) => doc.data() as Map<String, dynamic>)
-                .toList();
+          final events = docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
 
-            return ListView(
-              children: [
-                Text(
-                  'Mapa da Noite',
-                  style: AppTextStyles.title.copyWith(fontSize: 28),
-                ),
+            return {
+              'id': doc.id,
+              ...data,
+            };
+          }).toList();
 
-                const SizedBox(height: 8),
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: latitude != null && longitude != null
+                    ? RealMapWidget(
+                        latitude: latitude!,
+                        longitude: longitude!,
+                        events: events,
+                      )
+                    : const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      ),
+              ),
 
-                Text(
-                  'Encontre encontros, comboios e pontos automotivos próximos.',
-                  style: AppTextStyles.subtitle,
-                ),
-
-                const SizedBox(height: 16),
-
-                CustomCard(
-                  child: Container(
-                    height: 260,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
+              Positioned(
+                top: 48,
+                left: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.background.withOpacity(0.90),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: AppColors.border,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: latitude != null && longitude != null
-                          ? RealMapWidget(
-                              latitude: latitude!,
-                              longitude: longitude!,
-                              events: events,
-                            )
-                          : const Center(
-                              child: Icon(
-                                Icons.map,
-                                size: 90,
-                                color: AppColors.primary,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_pin,
+                        color: AppColors.primary,
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mapa da Noite',
+                              style: AppTextStyles.title.copyWith(
+                                fontSize: 22,
                               ),
                             ),
-                    ),
-                  ),
-                ),
 
-                const SizedBox(height: 16),
-
-                if (latitude != null && longitude != null)
-                  CustomCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sua localização',
-                          style: AppTextStyles.title.copyWith(fontSize: 22),
+                            Text(
+                              '${events.length} encontro(s) encontrados',
+                              style: AppTextStyles.subtitle,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Latitude: $latitude',
-                          style: AppTextStyles.subtitle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Longitude: $longitude',
-                          style: AppTextStyles.subtitle,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (latitude != null && longitude != null)
-                  const SizedBox(height: 16),
-
-                CustomCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Eventos carregados',
-                        style: AppTextStyles.title.copyWith(fontSize: 22),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${events.length} encontro(s) encontrados no Firestore.',
-                        style: AppTextStyles.subtitle,
                       ),
                     ],
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 16),
+              if (isLoadingLocation)
+                Positioned(
+                  bottom: 112,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      'Rastreamento de localização ativo...',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.subtitle,
+                    ),
+                  ),
+                ),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CreateEventScreen(),
+              Positioned(
+                bottom: 24,
+                left: 16,
+                right: 16,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CreateEventScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.add_location_alt),
+                          label: const Text('Criar Encontro'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.background,
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.add_location_alt),
-                    label: const Text('Criar Encontro'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.background,
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
                       ),
                     ),
-                  ),
-                ),
 
-                const SizedBox(height: 12),
+                    const SizedBox(width: 12),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: _getLocation,
-                    icon: const Icon(Icons.my_location),
-                    label: const Text('Usar Minha Localização'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
+                    SizedBox(
+                      height: 56,
+                      width: 56,
+                      child: OutlinedButton(
+                        onPressed:
+                            isLoadingLocation ? null : _startLocationTracking,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(
+                            color: AppColors.primary,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          backgroundColor:
+                              AppColors.background.withOpacity(0.85),
+                        ),
+                        child: isLoadingLocation
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              )
+                            : const Icon(Icons.my_location),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

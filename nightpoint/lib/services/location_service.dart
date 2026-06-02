@@ -1,7 +1,7 @@
 import 'package:geolocator/geolocator.dart';
 
 class LocationService {
-  static Future<Position> getCurrentPosition() async {
+  static Future<void> checkPermission() async {
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -24,7 +24,22 @@ class LocationService {
     if (permission == LocationPermission.deniedForever) {
       throw Exception('Permissão de localização negada permanentemente.');
     }
+  }
+
+  static Future<Position> getCurrentPosition() async {
+    await checkPermission();
 
     return await Geolocator.getCurrentPosition();
+  }
+
+  static Stream<Position> getPositionStream() async* {
+    await checkPermission();
+
+    yield* Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    );
   }
 }

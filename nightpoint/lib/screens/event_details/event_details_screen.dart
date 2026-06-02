@@ -21,7 +21,7 @@ class EventDetailsScreen extends StatelessWidget {
   final double? latitude;
   final double? longitude;
   final String eventId;
-  final String creatorEmail;
+  final String creatorName;
   
   Future<void> openInGoogleMaps() async {
     if (latitude == null || longitude == null) return;
@@ -50,7 +50,7 @@ class EventDetailsScreen extends StatelessWidget {
     this.latitude,
     this.longitude,
     required this.eventId,
-    required this.creatorEmail,
+    required this.creatorName,
   });
 
   @override
@@ -156,7 +156,7 @@ class EventDetailsScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Criado por: $creatorEmail',
+                      'Criado por: $creatorName',
                       style: AppTextStyles.subtitle,
                     ),
                   ),

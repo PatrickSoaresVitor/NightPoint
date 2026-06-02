@@ -121,7 +121,9 @@ class MyEventSection extends StatelessWidget {
                               description: data['description'] ?? '',
                               latitude: data['latitude'],
                               longitude: data['longitude'],
-                              creatorEmail: data['creatorEmail'] ?? 'Criador não informado',
+                              creatorName: data['creatorNickname'] ??
+                                data['creatorEmail'] ??
+                                'Criador não informado',
                             ),
                           ),
                         );

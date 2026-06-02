@@ -130,7 +130,9 @@ class EventsScreen extends StatelessWidget {
                           latitude: data['latitude'],
                           longitude: data['longitude'],
                           eventId: docs[index].id,
-                          creatorEmail: data['creatorEmail'] ?? 'Criador não informado',
+                          creatorName: data['creatorNickname'] ??
+                            data['creatorEmail'] ??
+                            'Criador não informado',
                           
                         ),
                       ),

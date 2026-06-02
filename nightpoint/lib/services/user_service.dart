@@ -40,6 +40,23 @@ class UserService {
     return data?['nickname'] ?? 'Usuário';
   }
 
+  Future<void> updateNickname({
+    required String nickname,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
+    }
+
+    await _firestore.collection('users').doc(user.uid).set({
+      'uid': user.uid,
+      'email': user.email,
+      'nickname': nickname,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Stream<DocumentSnapshot<Map<String, dynamic>>> getCurrentUserProfile() {
     final user = _auth.currentUser;
 

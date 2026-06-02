@@ -9,7 +9,8 @@ import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_card.dart';
 import '../auth/login_screen.dart';
 import '../my_events/my_events_screen.dart';
-import '../../services/user_service.dart';
+import '../../services/user_service.dart';  
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -69,6 +70,35 @@ class ProfileScreen extends StatelessWidget {
                             user?.email ?? 'E-mail não informado',
                             style: AppTextStyles.subtitle,
                             textAlign: TextAlign.center,
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => EditProfileScreen(
+                                      currentNickname: nickname.toString(),
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.edit),
+                              label: const Text('Editar Perfil'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       );
