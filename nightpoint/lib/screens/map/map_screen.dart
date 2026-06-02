@@ -24,6 +24,8 @@ class _MapScreenState extends State<MapScreen> {
 
   bool isLoadingLocation = true;
 
+  int recenterTrigger = 0;
+
   StreamSubscription<Position>? positionSubscription;
 
   @override
@@ -77,6 +79,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _centerOnUser() {
+    if (latitude == null || longitude == null) {
+      AppSnackbar.show(
+        context,
+        'Localização ainda não disponível.',
+      );
+
+      return;
+    }
+
+    setState(() {
+      recenterTrigger++;
+    });
+
+    AppSnackbar.show(
+      context,
+      'Mapa centralizado na sua localização.',
+    );
+  }
+
   @override
   void dispose() {
     positionSubscription?.cancel();
@@ -112,57 +134,13 @@ class _MapScreenState extends State<MapScreen> {
                         latitude: latitude!,
                         longitude: longitude!,
                         events: events,
+                        recenterTrigger: recenterTrigger,
                       )
                     : const Center(
                         child: CircularProgressIndicator(
                           color: AppColors.primary,
                         ),
                       ),
-              ),
-
-              Positioned(
-                top: 48,
-                left: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.background.withOpacity(0.90),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: AppColors.border,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.location_pin,
-                        color: AppColors.primary,
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mapa da Noite',
-                              style: AppTextStyles.title.copyWith(
-                                fontSize: 22,
-                              ),
-                            ),
-
-                            Text(
-                              '${events.length} encontro(s) encontrados',
-                              style: AppTextStyles.subtitle,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
 
               if (isLoadingLocation)
@@ -228,8 +206,9 @@ class _MapScreenState extends State<MapScreen> {
                       height: 56,
                       width: 56,
                       child: OutlinedButton(
-                        onPressed:
-                            isLoadingLocation ? null : _startLocationTracking,
+                        onPressed: latitude == null || longitude == null
+                            ? null
+                            : _centerOnUser,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primary,
                           side: const BorderSide(
@@ -250,7 +229,7 @@ class _MapScreenState extends State<MapScreen> {
                                   color: AppColors.primary,
                                 ),
                               )
-                            : const Icon(Icons.my_location),
+                            : const Icon(Icons.center_focus_strong),
                       ),
                     ),
                   ],

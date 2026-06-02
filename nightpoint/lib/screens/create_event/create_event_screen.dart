@@ -9,6 +9,9 @@ import '../../services/location_service.dart';
 import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_input.dart';
+import 'package:latlong2/latlong.dart';
+
+import '../location_picker/location_picker_screen.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -115,6 +118,42 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         });
       }
     }
+  }
+
+  Future<void> chooseLocationOnMap() async {
+    final initialLat = latitude ?? widget.initialLatitude;
+    final initialLng = longitude ?? widget.initialLongitude;
+
+    if (initialLat == null || initialLng == null) {
+      AppSnackbar.show(
+        context,
+        'Aguarde a localização inicial carregar no mapa.',
+      );
+
+      return;
+    }
+
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLatitude: initialLat,
+          initialLongitude: initialLng,
+        ),
+      ),
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      latitude = result.latitude;
+      longitude = result.longitude;
+    });
+
+    AppSnackbar.show(
+      context,
+      'Local do encontro selecionado no mapa!',
+    );
   }
 
   Future<void> saveEvent() async {
@@ -319,14 +358,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             const SizedBox(height: 16),
 
             OutlinedButton.icon(
-              onPressed: getEventLocation,
+              onPressed: chooseLocationOnMap,
               icon: Icon(
-                hasLocation ? Icons.check_circle : Icons.my_location,
+                hasLocation ? Icons.check_circle : Icons.map,
               ),
               label: Text(
                 hasLocation
-                    ? 'Localização capturada'
-                    : 'Usar localização atual',
+                    ? 'Local do encontro selecionado'
+                    : 'Escolher local no mapa',
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor:
@@ -339,7 +378,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
 
             CustomButton(
