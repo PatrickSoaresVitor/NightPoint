@@ -107,6 +107,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canCenter = latitude != null && longitude != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: StreamBuilder<QuerySnapshot>(
@@ -205,31 +207,41 @@ class _MapScreenState extends State<MapScreen> {
                     SizedBox(
                       height: 56,
                       width: 56,
-                      child: OutlinedButton(
-                        onPressed: latitude == null || longitude == null
-                            ? null
-                            : _centerOnUser,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(
-                            color: AppColors.primary,
+                      child: Material(
+                        color: AppColors.background.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(18),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: canCenter ? _centerOnUser : null,
+                          child: Container(
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: canCenter
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary.withOpacity(0.35),
+                              ),
+                            ),
+                            child: isLoadingLocation
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.center_focus_strong,
+                                    color: canCenter
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary
+                                            .withOpacity(0.45),
+                                    size: 24,
+                                  ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          backgroundColor:
-                              AppColors.background.withOpacity(0.85),
                         ),
-                        child: isLoadingLocation
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
-                                ),
-                              )
-                            : const Icon(Icons.center_focus_strong),
                       ),
                     ),
                   ],

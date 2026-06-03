@@ -72,13 +72,12 @@ class _RealMapWidgetState extends State<RealMapWidget> {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+              urlTemplate:
+                  'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
               userAgentPackageName: 'com.nightpoint.app',
             ),
-
             MarkerLayer(
               markers: [
-                // Marcador do usuário
                 if (widget.showUserMarker)
                   Marker(
                     point: LatLng(
@@ -97,7 +96,6 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                     ),
                   ),
 
-                // Marcadores dos eventos
                 ...widget.events
                     .where(
                       (event) =>
@@ -105,8 +103,10 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                           event['longitude'] != null,
                     )
                     .map((event) {
-                  final eventLatitude = (event['latitude'] as num).toDouble();
-                  final eventLongitude = (event['longitude'] as num).toDouble();
+                  final eventLatitude =
+                      (event['latitude'] as num).toDouble();
+                  final eventLongitude =
+                      (event['longitude'] as num).toDouble();
 
                   return Marker(
                     point: LatLng(
@@ -123,9 +123,10 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                             builder: (_) => EventDetailsScreen(
                               eventId: event['id'],
                               title: event['title'] ?? 'Sem título',
-                              location:
-                                  event['location'] ?? 'Local não informado',
-                              time: event['time'] ?? 'Horário não informado',
+                              location: event['location'] ??
+                                  'Local não informado',
+                              time: event['time'] ??
+                                  'Horário não informado',
                               category: event['category'] ?? 'Evento',
                               description: event['description'] ?? '',
                               latitude: eventLatitude,
@@ -148,7 +149,6 @@ class _RealMapWidgetState extends State<RealMapWidget> {
           ],
         ),
 
-        // Painel temporário para calibrar o zoom
         Positioned(
           top: 48,
           left: 16,
@@ -179,37 +179,30 @@ class _RealMapWidgetState extends State<RealMapWidget> {
   }
 
   double _getMarkerWidth() {
-    // LONGE: antes do zoom 16 aparece só ponto
     if (currentZoom < 16.0) {
       return 22;
     }
 
-    // MÉDIO: de 16 até antes de 19 aparece cápsula com nome
     if (currentZoom < 19.0) {
-      return 120;
+      return 132;
     }
 
-    // DETALHADO: 19 ou mais
     return 190;
   }
 
   double _getMarkerHeight() {
-    // LONGE
     if (currentZoom < 16.0) {
       return 22;
     }
 
-    // MÉDIO
     if (currentZoom < 19.0) {
-      return 34;
+      return 36;
     }
 
-    // DETALHADO
     return 88;
   }
 
   Widget _buildEventMarker(String title) {
-    // LONGE = só ponto
     if (currentZoom < 16.0) {
       return Center(
         child: Container(
@@ -234,60 +227,70 @@ class _RealMapWidgetState extends State<RealMapWidget> {
       );
     }
 
-    // MÉDIO = cápsula com nome
     if (currentZoom < 19.0) {
-      return Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 5,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.background.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: AppColors.primary,
-            width: 1,
+      return Center(
+        child: Container(
+          constraints: const BoxConstraints(
+            minWidth: 76,
+            maxWidth: 124,
+            minHeight: 28,
+            maxHeight: 34,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.12),
-              blurRadius: 6,
-              spreadRadius: 0,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 5,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.background.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: AppColors.primary,
+              width: 1,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: AppColors.accent,
-                shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.16),
+                blurRadius: 7,
+                spreadRadius: 0,
               ),
-            ),
-
-            const SizedBox(width: 6),
-
-            Flexible(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
                 ),
               ),
-            ),
-          ],
+
+              const SizedBox(width: 6),
+
+              Flexible(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    // DETALHADO = card completo
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 10,

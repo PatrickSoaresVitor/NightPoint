@@ -170,34 +170,6 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            CustomCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Badges',
-                    style: AppTextStyles.title.copyWith(
-                      fontSize: 22,
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: const [
-                      BadgeChip(text: 'Founder'),
-                      BadgeChip(text: 'Street Member'),
-                      BadgeChip(text: 'Night Crew'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
               height: 56,
