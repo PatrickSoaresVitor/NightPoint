@@ -6,7 +6,6 @@ import '../../services/garage_service.dart';
 import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_input.dart';
-import 'model_3d_picker_screen.dart';
 
 class EditGarageScreen extends StatefulWidget {
   final Map<String, dynamic>? garageData;
@@ -25,12 +24,10 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
   final modelController = TextEditingController();
   final yearController = TextEditingController();
   final colorController = TextEditingController();
-  final model3dUrlController = TextEditingController();
 
   final garageService = GarageService();
 
   String category = 'Street';
-  String model3dType = 'realistic';
 
   @override
   void initState() {
@@ -44,8 +41,6 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
       yearController.text = data['year'] ?? '';
       colorController.text = data['color'] ?? '';
       category = data['category'] ?? 'Street';
-      model3dType = data['model3dType'] ?? 'realistic';
-      model3dUrlController.text = data['model3dUrl'] ?? '';
     }
   }
 
@@ -56,7 +51,7 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
         colorController.text.trim().isEmpty) {
       AppSnackbar.show(
         context,
-        'Preencha todos os campos obrigatórios.',
+        'Preencha todos os campos.',
       );
 
       return;
@@ -68,8 +63,6 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
       year: yearController.text.trim(),
       color: colorController.text.trim(),
       category: category,
-      model3dType: model3dType,
-      model3dUrl: model3dUrlController.text.trim(),
     );
 
     if (!mounted) return;
@@ -82,27 +75,12 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
     Navigator.pop(context);
   }
 
-  void openModelPicker() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Model3dPickerScreen(
-          initialBrand: brandController.text.trim(),
-          initialModel: modelController.text.trim(),
-          initialYear: yearController.text.trim(),
-          initialType: model3dType,
-        ),
-      ),
-    );
-  }
-
   @override
   void dispose() {
     brandController.dispose();
     modelController.dispose();
     yearController.dispose();
     colorController.dispose();
-    model3dUrlController.dispose();
 
     super.dispose();
   }
@@ -186,67 +164,6 @@ class _EditGarageScreenState extends State<EditGarageScreen> {
                   category = value;
                 });
               },
-            ),
-
-            const SizedBox(height: 24),
-
-            DropdownButtonFormField<String>(
-              value: model3dType,
-              dropdownColor: AppColors.surface,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'realistic',
-                  child: Text('Modelo 3D Realista - Sketchfab'),
-                ),
-                DropdownMenuItem(
-                  value: 'cartoon',
-                  child: Text('Modelo 3D Cartoon - Poly Pizza'),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-
-                setState(() {
-                  model3dType = value;
-                });
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            CustomInput(
-              hint: 'Link do modelo 3D',
-              icon: Icons.view_in_ar,
-              controller: model3dUrlController,
-            ),
-
-            const SizedBox(height: 12),
-
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: OutlinedButton.icon(
-                onPressed: openModelPicker,
-                icon: const Icon(Icons.travel_explore),
-                label: const Text('Escolher carro 3D'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(
-                    color: AppColors.primary,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-              ),
             ),
 
             const SizedBox(height: 24),

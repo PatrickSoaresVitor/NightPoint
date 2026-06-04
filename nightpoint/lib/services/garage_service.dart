@@ -21,8 +21,6 @@ class GarageService {
     required String year,
     required String color,
     required String category,
-    required String model3dType,
-    required String model3dUrl,
   }) async {
     await _firestore.collection('garages').doc(userId).set({
       'userId': userId,
@@ -31,8 +29,6 @@ class GarageService {
       'year': year,
       'color': color,
       'category': category,
-      'model3dType': model3dType,
-      'model3dUrl': model3dUrl,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
