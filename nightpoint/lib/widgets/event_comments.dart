@@ -7,6 +7,7 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_text_styles.dart';
 import '../services/user_service.dart';
 import '../utils/app_snackbar.dart';
+import '../utils/avatar_helper.dart';
 import 'custom_button.dart';
 import 'custom_card.dart';
 import 'custom_input.dart';
@@ -48,7 +49,13 @@ class _EventCommentsState extends State<EventComments> {
         isSending = true;
       });
 
-      final nickname = await userService.getCurrentUserNickname();
+      final userData = await userService.getCurrentUserData();
+
+      final nickname = userData['nickname'] ?? 'Usuário';
+      final avatarStyle =
+          userData['avatarStyle'] ?? AvatarHelper.defaultStyle;
+      final avatarSeed =
+          userData['avatarSeed'] ?? nickname.toString();
 
       await FirebaseFirestore.instance
           .collection('events')
@@ -58,6 +65,8 @@ class _EventCommentsState extends State<EventComments> {
         'text': text,
         'userId': user.uid,
         'userNickname': nickname,
+        'avatarStyle': avatarStyle,
+        'avatarSeed': avatarSeed,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -159,13 +168,24 @@ class _EventCommentsState extends State<EventComments> {
                       final commentOwnerId = data['userId'];
                       final isCommentOwner =
                           currentUserId != null &&
-                          currentUserId == commentOwnerId;
+                              currentUserId == commentOwnerId;
 
-                      final canDelete =
-                          isCommentOwner || isEventOwner;
+                      final canDelete = isCommentOwner || isEventOwner;
 
                       final nickname =
-                          data['userNickname'] ?? 'Usuário';
+                          data['userNickname']?.toString() ?? 'Usuário';
+
+                      final avatarStyle =
+                          data['avatarStyle']?.toString() ??
+                              AvatarHelper.defaultStyle;
+
+                      final avatarSeed =
+                          data['avatarSeed']?.toString() ?? nickname;
+
+                      final avatarUrl = AvatarHelper.buildAvatarUrl(
+                        style: avatarStyle,
+                        seed: avatarSeed,
+                      );
 
                       return Padding(
                         padding: const EdgeInsets.only(
@@ -174,17 +194,36 @@ class _EventCommentsState extends State<EventComments> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: AppColors.surface,
-                              child: Text(
-                                nickname
-                                    .toString()
-                                    .substring(0, 1)
-                                    .toUpperCase(),
-                                style: const TextStyle(
+                            Container(
+                              width: 42,
+                              height: 42,
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                shape: BoxShape.circle,
+                                border: Border.all(
                                   color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
+                                  width: 1,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: Image.network(
+                                  avatarUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (context, error, stackTrace) {
+                                    return Center(
+                                      child: Text(
+                                        nickname
+                                            .substring(0, 1)
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
@@ -197,7 +236,7 @@ class _EventCommentsState extends State<EventComments> {
                                     CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    nickname.toString(),
+                                    nickname,
                                     style: AppTextStyles.body.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),

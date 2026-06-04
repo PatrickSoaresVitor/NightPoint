@@ -415,4 +415,140 @@ Regras:
 
     return cleanAiText(text);
   }
+  
+ Future<Map<String, String>> generateAvatarSuggestion({
+    required String nickname,
+    required List<String> availableStyles,
+    required String forcedStyle,
+    String? currentSeed,
+  }) async {
+    final variationCode = DateTime.now().millisecondsSinceEpoch;
+
+    String fallbackSeed() {
+      final safeNickname = nickname.trim().isEmpty ? 'driver' : nickname.trim();
+
+      final cleanNickname = safeNickname
+          .replaceAll(' ', '_')
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+
+      return 'night_${cleanNickname}_$variationCode';
+    }
+
+    if (apiKey.isEmpty) {
+      return {
+        'style': forcedStyle,
+        'seed': fallbackSeed(),
+      };
+    }
+
+    if (!availableStyles.contains(forcedStyle)) {
+      return {
+        'style': availableStyles.isNotEmpty ? availableStyles.first : 'pixel-art',
+        'seed': fallbackSeed(),
+      };
+    }
+
+    try {
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
+      );
+
+      final prompt = '''
+  Você é uma IA do app NightPoint, uma rede social automotiva com visual de game.
+
+  Crie uma seed para avatar DiceBear.
+
+  Nickname do usuário:
+  $nickname
+
+  Style obrigatório:
+  $forcedStyle
+
+  Seed atual:
+  ${currentSeed ?? 'não informado'}
+
+  Código de variação:
+  $variationCode
+
+  Regras:
+  - Use exatamente o style informado.
+  - Crie UMA seed curta, criativa e com vibe automotiva/gamer.
+  - Não repita a seed atual.
+  - Use termos como night, driver, garage, turbo, neon, street, crew, pilot, boost, track, club, premium, jdm, euro, mugen, skyline, supra, bmw, lancer, meet quando fizer sentido.
+  - Não use espaços na seed. Use underline.
+  - Não use caracteres especiais além de underline.
+  - Não escreva explicação.
+
+  Retorne exclusivamente neste JSON:
+  {
+    "style": "$forcedStyle",
+    "seed": "seed_criada"
+  }
+  ''';
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: jsonEncode({
+          'contents': [
+            {
+              'parts': [
+                {
+                  'text': prompt,
+                }
+              ]
+            }
+          ],
+          'generationConfig': {
+            'temperature': 0.9,
+            'topP': 0.9,
+            'topK': 30,
+          }
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        return {
+          'style': forcedStyle,
+          'seed': fallbackSeed(),
+        };
+      }
+
+      final data = jsonDecode(response.body);
+
+      final text = data['candidates'][0]['content']['parts'][0]['text']
+          .toString()
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
+      final json = jsonDecode(text) as Map<String, dynamic>;
+
+      final seed = json['seed']?.toString().trim() ?? '';
+
+      if (seed.isEmpty) {
+        return {
+          'style': forcedStyle,
+          'seed': fallbackSeed(),
+        };
+      }
+
+      final cleanSeed = seed
+          .replaceAll(' ', '_')
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+
+      return {
+        'style': forcedStyle,
+        'seed': cleanSeed.isEmpty ? fallbackSeed() : cleanSeed,
+      };
+    } catch (_) {
+      return {
+        'style': forcedStyle,
+        'seed': fallbackSeed(),
+      };
+    }
+  }
 }

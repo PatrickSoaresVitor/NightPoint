@@ -9,6 +9,7 @@ class CustomInput extends StatelessWidget {
   final int maxLines;
   final bool obscureText;
   final TextEditingController? controller;
+  final ValueChanged<String>? onChanged;
 
   const CustomInput({
     super.key,
@@ -17,6 +18,7 @@ class CustomInput extends StatelessWidget {
     this.maxLines = 1,
     this.obscureText = false,
     this.controller,
+    this.onChanged,
   });
 
   @override
@@ -24,7 +26,8 @@ class CustomInput extends StatelessWidget {
     return TextField(
       controller: controller,
       obscureText: obscureText,
-      maxLines: maxLines,
+      maxLines: obscureText ? 1 : maxLines,
+      onChanged: onChanged,
       style: const TextStyle(
         color: AppColors.textPrimary,
       ),
