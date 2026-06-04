@@ -105,7 +105,7 @@ class _Model3dPickerScreenState extends State<Model3dPickerScreen> {
     if (model3dType == 'realistic') {
       parts.add('car');
     } else {
-      parts.add('car low poly');
+      parts.add('car');
     }
 
     return parts.join(' ');
@@ -123,23 +123,21 @@ class _Model3dPickerScreenState extends State<Model3dPickerScreen> {
     if (model3dType == 'realistic') {
       parts.add('car');
     } else {
-      parts.add('low poly car');
+      parts.add('car');
     }
 
     return parts.join(' ');
   }
 
   String buildBrandQuery() {
-    final brand = brandController.text.trim();
+  final brand = brandController.text.trim();
 
-    if (brand.isEmpty) {
-      return model3dType == 'realistic' ? 'car' : 'low poly car';
-    }
-
-    return model3dType == 'realistic'
-        ? '$brand car'
-        : '$brand low poly car';
+  if (brand.isEmpty) {
+    return 'car';
   }
+
+  return '$brand car';
+}
 
   @override
   void dispose() {
