@@ -16,6 +16,7 @@ class AiService {
   Future<String> generateEventDescription({
     required String title,
     required String location,
+    required String date,
     required String time,
     required String category,
   }) async {
@@ -32,6 +33,7 @@ Crie uma descrição curta, chamativa e profissional para um encontro automotivo
 
 Nome: $title
 Local: $location
+Data: $date
 Horário: $time
 Categoria: $category
 
@@ -78,6 +80,7 @@ Regras:
   Future<String> generateSharePost({
     required String title,
     required String location,
+    required String date,
     required String time,
     required String category,
     required String description,
@@ -96,6 +99,7 @@ Crie um post curto para divulgar um encontro automotivo.
 Dados do evento:
 Nome: $title
 Local: $location
+Data: $date
 Horário: $time
 Categoria: $category
 Descrição: $description
@@ -145,6 +149,7 @@ Regras:
   Future<String> analyzeEventSafety({
     required String title,
     required String location,
+    required String date,
     required String time,
     required String category,
     required String description,
@@ -163,6 +168,7 @@ Analise a segurança e adequação deste evento automotivo.
 Dados do evento:
 Nome: $title
 Local: $location
+Data: $date
 Horário: $time
 Categoria: $category
 Descrição: $description
@@ -320,7 +326,13 @@ Regras:
   Future<String> recommendEvents({
     required List<Map<String, dynamic>> events,
     Map<String, dynamic>? garage,
+    double? userLatitude,
+    double? userLongitude,
+    DateTime? currentDateTime,
   }) async {
+    if (apiKey.isEmpty) {
+      throw Exception('API Key da IA não configurada.');
+    }
 
     if (events.isEmpty) {
       return 'Ainda não há eventos suficientes para recomendar.';
@@ -330,30 +342,64 @@ Regras:
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
     );
 
+    final now = currentDateTime ?? DateTime.now();
+
+    String periodOfDay(DateTime dateTime) {
+      final hour = dateTime.hour;
+
+      if (hour >= 5 && hour < 12) {
+        return 'manhã';
+      }
+
+      if (hour >= 12 && hour < 18) {
+        return 'tarde';
+      }
+
+      return 'noite';
+    }
+
     final garageText = garage == null
-    ? 'Garagem não informada.'
-    : garage.entries
-        .map((entry) => '${entry.key}: ${entry.value}')
-        .join('\n');
+        ? 'Garagem não informada.'
+        : garage.entries
+            .map((entry) => '${entry.key}: ${entry.value}')
+            .join('\n');
+
+    final locationText = userLatitude == null || userLongitude == null
+        ? 'Localização atual do usuário não informada.'
+        : '''
+  Latitude atual do usuário: $userLatitude
+  Longitude atual do usuário: $userLongitude
+  ''';
 
     final eventsText = events.map((event) {
       return '''
   Evento:
   Título: ${event['title'] ?? 'Sem título'}
   Local: ${event['location'] ?? 'Local não informado'}
-  Horário: ${event['time'] ?? 'Horário não informado'}
+  Data cadastrada: ${event['date'] ?? 'Data não informada'}
+  Horário cadastrado: ${event['time'] ?? 'Horário não informado'}
   Categoria: ${event['category'] ?? 'Evento'}
   Descrição: ${event['description'] ?? 'Sem descrição'}
+  Latitude do evento: ${event['latitude'] ?? 'Não informada'}
+  Longitude do evento: ${event['longitude'] ?? 'Não informada'}
+  Distância aproximada até o usuário: ${event['distanceKmText'] ?? 'Não calculada'}
   Participantes: ${(event['participants'] as List?)?.length ?? 0}
   Curtidas: ${(event['likes'] as List?)?.length ?? 0}
   ''';
     }).join('\n');
 
     final prompt = '''
-  Você é uma IA assistente do app NightPoint, uma rede social de encontros automotivos.
+  Você é uma IA assistente do app NightPoint, uma rede social de encontros automotivos seguros.
 
   Perfil/Garagem do usuário:
   $garageText
+
+  Localização atual do usuário:
+  $locationText
+
+  Horário atual:
+  Data e hora: $now
+  Período do dia: ${periodOfDay(now)}
 
   Analise os eventos abaixo e recomende até 3 eventos mais interessantes para o usuário.
 
@@ -361,22 +407,24 @@ Regras:
   $eventsText
 
   Critérios:
-  - Priorize eventos organizados, seguros e com boa proposta social.
+  - Use a localização atual do usuário, a distância aproximada dos eventos e o horário atual para recomendar.
+  - Priorize eventos mais próximos, bem descritos, organizados e com proposta social segura.
   - Leve em conta a garagem do usuário para recomendar eventos compatíveis.
-  - Se a garagem indicar carro premium, europeu, JDM, street ou drift, use isso como preferência.
   - Leve em conta categoria, descrição, movimentação, participantes e curtidas.
+  - - Considere se a data e o horário do evento fazem sentido para o momento atual.
   - Não incentive direção perigosa.
   - Não mencione racha, corrida ilegal, burnout, drift em via pública ou manobras perigosas.
+  - Recomende encontros em tom seguro, social e responsável.
 
   Formato obrigatório:
   Recomendação 1: nome do evento
-  Motivo: explicação curta
+  Motivo: explicação curta citando distância, horário ou compatibilidade quando possível
 
   Recomendação 2: nome do evento
-  Motivo: explicação curta
+  Motivo: explicação curta citando distância, horário ou compatibilidade quando possível
 
   Recomendação 3: nome do evento
-  Motivo: explicação curta
+  Motivo: explicação curta citando distância, horário ou compatibilidade quando possível
 
   Regras:
   - Escreva em português do Brasil.

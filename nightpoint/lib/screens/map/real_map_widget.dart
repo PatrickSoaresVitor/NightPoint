@@ -121,20 +121,17 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => EventDetailsScreen(
-                              eventId: event['id'],
-                              title: event['title'] ?? 'Sem título',
-                              location: event['location'] ??
-                                  'Local não informado',
-                              time: event['time'] ??
-                                  'Horário não informado',
-                              category: event['category'] ?? 'Evento',
-                              description: event['description'] ?? '',
-                              latitude: eventLatitude,
-                              longitude: eventLongitude,
-                              creatorName: event['creatorNickname'] ??
-                                  event['creatorEmail'] ??
-                                  'Criador não informado',
-                            ),
+                            eventId: event['id'],
+                            title: event['title'] ?? 'Sem título',
+                            location: event['location'] ?? 'Local não informado',
+                            date: event['date'] ?? 'Data não informada',
+                            time: event['time'] ?? 'Horário não informado',
+                            category: event['category'] ?? 'Evento',
+                            description: event['description'] ?? '',
+                            latitude: eventLatitude,
+                            longitude: eventLongitude,
+                            creatorName: event['creatorNickname'] ?? event['creatorEmail'] ?? 'Criador não informado',
+                          ),
                           ),
                         );
                       },

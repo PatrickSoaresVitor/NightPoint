@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../services/ai_service.dart';
+import '../../services/location_service.dart';
 import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_card.dart';
@@ -76,7 +78,6 @@ class _EventsScreenState extends State<EventsScreen> {
         context,
         'Não há eventos para recomendar.',
       );
-
       return;
     }
 
@@ -100,9 +101,59 @@ class _EventsScreenState extends State<EventsScreen> {
         }
       }
 
+      final position = await LocationService.getCurrentPosition();
+
+      final userLatitude = position.latitude;
+      final userLongitude = position.longitude;
+
+      final now = DateTime.now();
+
+      final eventsWithDistance = events.map((event) {
+        final latitudeValue = event['latitude'];
+        final longitudeValue = event['longitude'];
+
+        double? distanceKm;
+
+        if (latitudeValue != null && longitudeValue != null) {
+          final eventLatitude = (latitudeValue as num).toDouble();
+          final eventLongitude = (longitudeValue as num).toDouble();
+
+          final distanceMeters = Geolocator.distanceBetween(
+            userLatitude,
+            userLongitude,
+            eventLatitude,
+            eventLongitude,
+          );
+
+          distanceKm = distanceMeters / 1000;
+        }
+
+        return {
+          ...event,
+          'distanceKm': distanceKm,
+          'distanceKmText': distanceKm == null
+              ? 'Não calculada'
+              : '${distanceKm.toStringAsFixed(1)} km',
+        };
+      }).toList();
+
+      eventsWithDistance.sort((a, b) {
+        final distanceA = a['distanceKm'] as double?;
+        final distanceB = b['distanceKm'] as double?;
+
+        if (distanceA == null && distanceB == null) return 0;
+        if (distanceA == null) return 1;
+        if (distanceB == null) return -1;
+
+        return distanceA.compareTo(distanceB);
+      });
+
       final recommendation = await aiService.recommendEvents(
-        events: events,
+        events: eventsWithDistance,
         garage: garage,
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+        currentDateTime: now,
       );
 
       if (!mounted) return;
@@ -126,6 +177,162 @@ class _EventsScreenState extends State<EventsScreen> {
           isGeneratingRecommendation = false;
         });
       }
+    }
+  }
+
+  void openEventDetails(
+    Map<String, dynamic> event,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailsScreen(
+          title: event['title'] ?? 'Sem título',
+          location: event['location'] ?? 'Local não informado',
+          date: event['date'] ?? 'Data não informada',
+          time: event['time'] ?? 'Horário não informado',
+          category: event['category'] ?? 'Evento',
+          description: event['description'] ?? '',
+          latitude: event['latitude'],
+          longitude: event['longitude'],
+          eventId: event['id'],
+          creatorName: event['creatorNickname'] ??
+              event['creatorEmail'] ??
+              'Criador não informado',
+        ),
+      ),
+    );
+  }
+
+  void openEditEvent(
+    Map<String, dynamic> event,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditEventScreen(
+          eventId: event['id'],
+          eventData: event,
+        ),
+      ),
+    );
+  }
+
+  Future<void> toggleLike({
+    required String eventId,
+    required bool isLiked,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      AppSnackbar.show(
+        context,
+        'Faça login para curtir.',
+      );
+      return;
+    }
+
+    final eventRef = FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId);
+
+    if (isLiked) {
+      await eventRef.update({
+        'likes': FieldValue.arrayRemove([user.uid]),
+      });
+    } else {
+      await eventRef.update({
+        'likes': FieldValue.arrayUnion([user.uid]),
+      });
+    }
+  }
+
+  Future<void> toggleParticipation({
+    required String eventId,
+    required bool isParticipating,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      AppSnackbar.show(
+        context,
+        'Faça login para participar.',
+      );
+      return;
+    }
+
+    final eventRef = FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId);
+
+    if (isParticipating) {
+      await eventRef.update({
+        'participants': FieldValue.arrayRemove([user.uid]),
+      });
+    } else {
+      await eventRef.update({
+        'participants': FieldValue.arrayUnion([user.uid]),
+      });
+    }
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    await FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .delete();
+
+    if (!mounted) return;
+
+    AppSnackbar.show(
+      context,
+      'Evento excluído.',
+    );
+  }
+
+  Future<void> confirmDeleteEvent(String eventId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Excluir evento',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          content: const Text(
+            'Tem certeza que deseja excluir este evento?',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text(
+                'Excluir',
+                style: TextStyle(
+                  color: AppColors.danger,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await deleteEvent(eventId);
     }
   }
 
@@ -316,7 +523,7 @@ class _EventsScreenState extends State<EventsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Recomendação da IA',
+                                'Recomendação por localização e horário',
                                 style: AppTextStyles.title.copyWith(
                                   fontSize: 22,
                                 ),
@@ -368,45 +575,44 @@ class _EventsScreenState extends State<EventsScreen> {
                             padding: const EdgeInsets.only(bottom: 16),
                             child: GestureDetector(
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => EventDetailsScreen(
-                                      title:
-                                          event['title'] ?? 'Sem título',
-                                      location: event['location'] ??
-                                          'Local não informado',
-                                      time: event['time'] ??
-                                          'Horário não informado',
-                                      category:
-                                          event['category'] ?? 'Evento',
-                                      description:
-                                          event['description'] ?? '',
-                                      latitude: event['latitude'],
-                                      longitude: event['longitude'],
-                                      eventId: event['id'],
-                                      creatorName:
-                                          event['creatorNickname'] ??
-                                              event['creatorEmail'] ??
-                                              'Criador não informado',
-                                    ),
-                                  ),
-                                );
+                                openEventDetails(event);
                               },
                               child: EventCard(
                                 id: event['id'],
                                 title: event['title'] ?? 'Sem título',
                                 location: event['location'] ??
                                     'Local não informado',
+                                date: event['date'] ??
+                                    'Data não informada',
                                 time: event['time'] ??
                                     'Horário não informado',
-                                category: event['category'] ?? 'Evento',
-                                description: event['description'] ?? '',
+                                category:
+                                    event['category'] ?? 'Evento',
+                                description:
+                                    event['description'] ?? '',
                                 isOwner: isOwner,
                                 participantsCount: participants.length,
                                 likesCount: likes.length,
                                 isLiked: isLiked,
                                 isParticipating: isParticipating,
+                                onEdit: () {
+                                  openEditEvent(event);
+                                },
+                                onDelete: () {
+                                  confirmDeleteEvent(event['id']);
+                                },
+                                onLike: () {
+                                  toggleLike(
+                                    eventId: event['id'],
+                                    isLiked: isLiked,
+                                  );
+                                },
+                                onParticipate: () {
+                                  toggleParticipation(
+                                    eventId: event['id'],
+                                    isParticipating: isParticipating,
+                                  );
+                                },
                               ),
                             ),
                           );
@@ -424,31 +630,41 @@ class _EventsScreenState extends State<EventsScreen> {
 }
 
 class EventCard extends StatelessWidget {
+  final String id;
   final String title;
   final String location;
+  final String date;
   final String time;
   final String category;
   final String description;
-  final String id;
   final bool isOwner;
   final int participantsCount;
   final int likesCount;
   final bool isLiked;
   final bool isParticipating;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onLike;
+  final VoidCallback onParticipate;
 
   const EventCard({
     super.key,
+    required this.id,
     required this.title,
     required this.location,
+    required this.date,
     required this.time,
     required this.category,
     required this.description,
-    required this.id,
     required this.isOwner,
     required this.participantsCount,
     required this.likesCount,
     required this.isLiked,
     required this.isParticipating,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onLike,
+    required this.onParticipate,
   });
 
   @override
@@ -457,13 +673,49 @@ class EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            category,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  category,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+
+              if (isOwner)
+                PopupMenuButton<String>(
+                  color: AppColors.surface,
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: AppColors.textSecondary,
+                  ),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      onEdit();
+                    }
+
+                    if (value == 'delete') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (context) {
+                    return const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Editar'),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Excluir'),
+                      ),
+                    ];
+                  },
+                ),
+            ],
           ),
 
           const SizedBox(height: 8),
@@ -473,83 +725,80 @@ class EventCard extends StatelessWidget {
             style: AppTextStyles.title.copyWith(fontSize: 24),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(
                 Icons.location_on,
                 color: AppColors.accent,
                 size: 18,
               ),
-              const SizedBox(width: 6),
+
+              const SizedBox(width: 8),
+
               Expanded(
                 child: Text(
                   location,
                   style: AppTextStyles.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Row(
             children: [
               const Icon(
-                Icons.access_time,
-                color: AppColors.secondary,
+                Icons.calendar_month,
+                color: AppColors.primary,
                 size: 18,
               ),
-              const SizedBox(width: 6),
+
+              const SizedBox(width: 8),
+
               Expanded(
                 child: Text(
-                  time,
+                  '$date • $time',
                   style: AppTextStyles.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Row(
             children: [
-              Icon(
-                isParticipating ? Icons.check_circle : Icons.groups,
-                color: isParticipating
-                    ? AppColors.accent
-                    : AppColors.primary,
+              const Icon(
+                Icons.groups,
+                color: AppColors.primary,
                 size: 18,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  isParticipating
-                      ? '$participantsCount participante(s) • Você vai'
-                      : '$participantsCount participante(s)',
-                  style: AppTextStyles.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+
+              const SizedBox(width: 8),
+
+              Text(
+                '$participantsCount participante(s)',
+                style: AppTextStyles.subtitle,
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           Row(
             children: [
               Icon(
                 isLiked ? Icons.favorite : Icons.favorite_border,
-                color: AppColors.danger,
+                color: isLiked ? AppColors.danger : AppColors.danger,
                 size: 18,
               ),
-              const SizedBox(width: 6),
+
+              const SizedBox(width: 8),
+
               Text(
                 '$likesCount curtida(s)',
                 style: AppTextStyles.subtitle,
@@ -558,94 +807,71 @@ class EventCard extends StatelessWidget {
           ),
 
           if (description.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
             Text(
               description,
               style: AppTextStyles.subtitle,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
 
-          if (isOwner) ...[
-            const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditEventScreen(
-                          eventId: id,
-                          eventData: {
-                            'title': title,
-                            'location': location,
-                            'time': time,
-                            'description': description,
-                            'category': category,
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.edit,
-                    color: AppColors.primary,
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onLike,
+                  icon: Icon(
+                    isLiked
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isLiked ? 'Curtido' : 'Curtir',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: const BorderSide(
+                      color: AppColors.danger,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
+              ),
 
-                IconButton(
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          backgroundColor: AppColors.surface,
-                          title: const Text('Excluir encontro'),
-                          content: const Text(
-                            'Tem certeza que deseja excluir este encontro?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(context, false);
-                              },
-                              child: const Text('Cancelar'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(context, true);
-                              },
-                              child: const Text(
-                                'Excluir',
-                                style: TextStyle(
-                                  color: AppColors.danger,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
+              const SizedBox(width: 12),
 
-                    if (confirm != true) return;
-
-                    await FirebaseFirestore.instance
-                        .collection('events')
-                        .doc(id)
-                        .delete();
-                  },
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: AppColors.danger,
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onParticipate,
+                  icon: Icon(
+                    isParticipating
+                        ? Icons.check_circle
+                        : Icons.group_add,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isParticipating
+                        ? 'Participando'
+                        : 'Participar',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(
+                      color: AppColors.primary,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -16,6 +16,7 @@ class EventService {
     required String description,
     required double latitude,
     required double longitude,
+    required String date,
   }) async {
     final user = _auth.currentUser;
 
@@ -37,6 +38,7 @@ class EventService {
       'creatorEmail': user.email,
       'creatorNickname': nickname,
       'createdAt': FieldValue.serverTimestamp(),
+      'date': date,
     });
   }
 }

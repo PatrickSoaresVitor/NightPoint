@@ -113,18 +113,17 @@ class MyEventSection extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => EventDetailsScreen(
-                              eventId: doc.id,
-                              title: data['title'] ?? 'Sem título',
-                              location: data['location'] ?? 'Local não informado',
-                              time: data['time'] ?? 'Horário não informado',
-                              category: data['category'] ?? 'Evento',
-                              description: data['description'] ?? '',
-                              latitude: data['latitude'],
-                              longitude: data['longitude'],
-                              creatorName: data['creatorNickname'] ??
-                                data['creatorEmail'] ??
-                                'Criador não informado',
-                            ),
+                            eventId: doc.id,
+                            title: data['title'] ?? 'Sem título',
+                            location: data['location'] ?? 'Local não informado',
+                            date: data['date'] ?? 'Data não informada',
+                            time: data['time'] ?? 'Horário não informado',
+                            category: data['category'] ?? 'Evento',
+                            description: data['description'] ?? '',
+                            latitude: data['latitude'],
+                            longitude: data['longitude'],
+                            creatorName: data['creatorNickname'] ?? data['creatorEmail'] ?? 'Criador não informado',
+                          ),
                           ),
                         );
                       },

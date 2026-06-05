@@ -32,6 +32,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final locationController = TextEditingController();
   final timeController = TextEditingController();
   final descriptionController = TextEditingController();
+  final dateController = TextEditingController();
 
   final eventService = EventService();
   final aiService = AiService();
@@ -169,11 +170,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Future<void> generateDescriptionWithAI() async {
     if (titleController.text.trim().isEmpty ||
-        locationController.text.trim().isEmpty ||
-        timeController.text.trim().isEmpty) {
+      locationController.text.trim().isEmpty ||
+      dateController.text.trim().isEmpty ||
+      timeController.text.trim().isEmpty) {
       AppSnackbar.show(
         context,
-        'Preencha nome, local e horário antes de usar a IA.',
+        'Preencha nome, local, data e horário antes de usar a IA.',
       );
 
       return;
@@ -187,6 +189,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final description = await aiService.generateEventDescription(
         title: titleController.text.trim(),
         location: locationController.text.trim(),
+        date: dateController.text.trim(),
         time: timeController.text.trim(),
         category: category,
       );
@@ -261,11 +264,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Future<void> saveEvent() async {
     if (titleController.text.trim().isEmpty ||
-        locationController.text.trim().isEmpty ||
-        timeController.text.trim().isEmpty) {
+      locationController.text.trim().isEmpty ||
+      dateController.text.trim().isEmpty ||
+      timeController.text.trim().isEmpty) {
       AppSnackbar.show(
         context,
-        'Preencha nome, local e horário.',
+        'Preencha nome, local, data e horário.',
       );
 
       return;
@@ -288,6 +292,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final safetyAnalysis = await aiService.analyzeEventSafety(
         title: titleController.text.trim(),
         location: locationController.text.trim(),
+        date: dateController.text.trim(),
         time: timeController.text.trim(),
         category: category,
         description: descriptionController.text.trim(),
@@ -315,6 +320,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         description: descriptionController.text.trim(),
         latitude: latitude!,
         longitude: longitude!,
+        date: dateController.text.trim(),
       );
 
       if (!mounted) return;
@@ -329,6 +335,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       locationController.clear();
       timeController.clear();
       descriptionController.clear();
+      dateController.clear();
 
       setState(() {
         category = 'Street';
@@ -350,12 +357,72 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     }
   }
+  Future<void> pickEventTime() async {
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.primary,
+              surface: AppColors.surface,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedTime == null) return;
+
+    final hour = selectedTime.hour.toString().padLeft(2, '0');
+    final minute = selectedTime.minute.toString().padLeft(2, '0');
+
+    setState(() {
+      timeController.text = '$hour:$minute';
+    });
+  }
+  Future<void> pickEventDate() async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(
+        const Duration(days: 365),
+      ),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.primary,
+              surface: AppColors.surface,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedDate == null) return;
+
+    final day = selectedDate.day.toString().padLeft(2, '0');
+    final month = selectedDate.month.toString().padLeft(2, '0');
+    final year = selectedDate.year.toString();
+
+    setState(() {
+      dateController.text = '$day/$month/$year';
+    });
+  }
 
   @override
   void dispose() {
     ideaController.dispose();
     titleController.dispose();
     locationController.dispose();
+    dateController.dispose();
     timeController.dispose();
     descriptionController.dispose();
 
@@ -437,10 +504,27 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
             const SizedBox(height: 16),
 
-            CustomInput(
-              hint: 'Horário',
-              icon: Icons.access_time,
-              controller: timeController,
+            GestureDetector(
+              onTap: pickEventDate,
+              child: AbsorbPointer(
+                child: CustomInput(
+                  hint: 'Data',
+                  icon: Icons.calendar_month,
+                  controller: dateController,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: pickEventTime,
+              child: AbsorbPointer(
+                child: CustomInput(
+                  hint: 'Horário',
+                  icon: Icons.access_time,
+                  controller: timeController,
+                ),
+              ),
             ),
 
             const SizedBox(height: 16),

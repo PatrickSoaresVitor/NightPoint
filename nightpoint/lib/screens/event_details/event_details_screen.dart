@@ -17,6 +17,7 @@ import '../map/real_map_widget.dart';
 class EventDetailsScreen extends StatefulWidget {
   final String title;
   final String location;
+  final String date;
   final String time;
   final String category;
   final String description;
@@ -29,6 +30,7 @@ class EventDetailsScreen extends StatefulWidget {
     super.key,
     required this.title,
     required this.location,
+    required this.date,
     required this.time,
     required this.category,
     required this.description,
@@ -74,6 +76,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       final post = await aiService.generateSharePost(
         title: widget.title,
         location: widget.location,
+        date: widget.date,
         time: widget.time,
         category: widget.category,
         description: widget.description,
@@ -175,13 +178,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   Row(
                     children: [
                       const Icon(
-                        Icons.access_time,
+                        Icons.calendar_month,
                         color: AppColors.secondary,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        widget.time,
-                        style: AppTextStyles.subtitle,
+                      Expanded(
+                        child: Text(
+                          '${widget.date} • ${widget.time}',
+                          style: AppTextStyles.subtitle,
+                        ),
                       ),
                     ],
                   ),
@@ -347,6 +352,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           'id': widget.eventId,
                           'title': widget.title,
                           'location': widget.location,
+                          'date': widget.date,
                           'time': widget.time,
                           'category': widget.category,
                           'description': widget.description,
