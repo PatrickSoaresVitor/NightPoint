@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-
 import '../../core/theme/app_colors.dart';
 import '../event_details/event_details_screen.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../services/route_service.dart';
+import '../../utils/app_snackbar.dart';
 
 class RealMapWidget extends StatefulWidget {
   final double latitude;
@@ -26,11 +28,14 @@ class RealMapWidget extends StatefulWidget {
 }
 
 class _RealMapWidgetState extends State<RealMapWidget> {
-  final MapController mapController = MapController();
+ final MapController mapController = MapController();
+  final RouteService routeService = RouteService();
 
   static const double defaultZoom = 17.4;
 
   double currentZoom = defaultZoom;
+  List<LatLng> routePoints = [];
+  bool isLoadingRoute = false;
 
   @override
   void didUpdateWidget(covariant RealMapWidget oldWidget) {
@@ -45,6 +50,60 @@ class _RealMapWidgetState extends State<RealMapWidget> {
       setState(() {
         currentZoom = defaultZoom;
       });
+    }
+  }
+  Future<void> showRouteToEvent({
+    required double eventLatitude,
+    required double eventLongitude,
+  }) async {
+    try {
+      setState(() {
+        isLoadingRoute = true;
+      });
+
+      final position = await Geolocator.getCurrentPosition();
+
+      final points = await routeService.getDrivingRoute(
+        startLatitude: position.latitude,
+        startLongitude: position.longitude,
+        endLatitude: eventLatitude,
+        endLongitude: eventLongitude,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        routePoints = points;
+      });
+
+      if (points.isNotEmpty) {
+        final bounds = LatLngBounds.fromPoints(points);
+
+        mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(48),
+          ),
+        );
+      }
+
+      AppSnackbar.show(
+        context,
+        'Rota carregada!',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      AppSnackbar.show(
+        context,
+        'Não foi possível carregar a rota.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoadingRoute = false;
+        });
+      }
     }
   }
 
@@ -75,6 +134,16 @@ class _RealMapWidgetState extends State<RealMapWidget> {
               urlTemplate:
                   'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
               userAgentPackageName: 'com.nightpoint.app',
+            ),
+            if (routePoints.isNotEmpty)
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: routePoints,
+                  strokeWidth: 5,
+                  color: AppColors.primary,
+                ),
+              ],
             ),
             MarkerLayer(
               markers: [
@@ -171,6 +240,37 @@ class _RealMapWidgetState extends State<RealMapWidget> {
             ),
           ),
         ),
+        if (widget.events.length == 1 &&
+            widget.events.first['latitude'] != null &&
+            widget.events.first['longitude'] != null)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              heroTag: 'route_button_${widget.events.first['id'] ?? 'event'}',
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.background,
+              onPressed: isLoadingRoute
+                  ? null
+                  : () {
+                      final eventLatitude =
+                          (widget.events.first['latitude'] as num).toDouble();
+                      final eventLongitude =
+                          (widget.events.first['longitude'] as num).toDouble();
+
+                      showRouteToEvent(
+                        eventLatitude: eventLatitude,
+                        eventLongitude: eventLongitude,
+                      );
+                    },
+              icon: Icon(
+                isLoadingRoute ? Icons.hourglass_empty : Icons.route,
+              ),
+              label: Text(
+                isLoadingRoute ? 'Calculando...' : 'Rota',
+              ),
+            ),
+          ),
       ],
     );
   }
