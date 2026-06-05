@@ -3,8 +3,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
+class RouteResult {
+  final List<LatLng> points;
+  final double distanceKm;
+  final double durationMinutes;
+
+  const RouteResult({
+    required this.points,
+    required this.distanceKm,
+    required this.durationMinutes,
+  });
+}
+
 class RouteService {
-  Future<List<LatLng>> getDrivingRoute({
+  Future<RouteResult> getDrivingRoute({
     required double startLatitude,
     required double startLongitude,
     required double endLatitude,
@@ -28,14 +40,25 @@ class RouteService {
       throw Exception('Rota não encontrada.');
     }
 
-    final coordinates =
-        data['routes'][0]['geometry']['coordinates'] as List<dynamic>;
+    final route = data['routes'][0];
 
-    return coordinates.map((coordinate) {
+    final coordinates =
+        route['geometry']['coordinates'] as List<dynamic>;
+
+    final points = coordinates.map((coordinate) {
       final longitude = (coordinate[0] as num).toDouble();
       final latitude = (coordinate[1] as num).toDouble();
 
       return LatLng(latitude, longitude);
     }).toList();
+
+    final distanceMeters = (route['distance'] as num).toDouble();
+    final durationSeconds = (route['duration'] as num).toDouble();
+
+    return RouteResult(
+      points: points,
+      distanceKm: distanceMeters / 1000,
+      durationMinutes: durationSeconds / 60,
+    );
   }
 }

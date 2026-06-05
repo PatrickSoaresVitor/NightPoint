@@ -1,11 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import '../../core/theme/app_colors.dart';
-import '../event_details/event_details_screen.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+
+import '../../core/theme/app_colors.dart';
 import '../../services/route_service.dart';
 import '../../utils/app_snackbar.dart';
+import '../event_details/event_details_screen.dart';
 
 class RealMapWidget extends StatefulWidget {
   final double latitude;
@@ -28,14 +31,46 @@ class RealMapWidget extends StatefulWidget {
 }
 
 class _RealMapWidgetState extends State<RealMapWidget> {
- final MapController mapController = MapController();
+  final MapController mapController = MapController();
   final RouteService routeService = RouteService();
 
   static const double defaultZoom = 17.4;
 
   double currentZoom = defaultZoom;
+
+  LatLng? currentUserPosition;
+  Map<String, dynamic>? selectedEvent;
+
   List<LatLng> routePoints = [];
+
+  double? routeDistanceKm;
+  double? routeDurationMinutes;
+
   bool isLoadingRoute = false;
+  bool isRouteActive = false;
+
+  StreamSubscription<Position>? positionSubscription;
+
+  DateTime? lastRouteUpdate;
+  LatLng? lastRouteUserPosition;
+
+  @override
+  void initState() {
+    super.initState();
+
+    currentUserPosition = LatLng(
+      widget.latitude,
+      widget.longitude,
+    );
+
+    startUserPositionListener();
+  }
+
+  @override
+  void dispose() {
+    positionSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant RealMapWidget oldWidget) {
@@ -43,7 +78,8 @@ class _RealMapWidgetState extends State<RealMapWidget> {
 
     if (widget.recenterTrigger != oldWidget.recenterTrigger) {
       mapController.move(
-        LatLng(widget.latitude, widget.longitude),
+        currentUserPosition ??
+            LatLng(widget.latitude, widget.longitude),
         defaultZoom,
       );
 
@@ -52,20 +88,108 @@ class _RealMapWidgetState extends State<RealMapWidget> {
       });
     }
   }
-  Future<void> showRouteToEvent({
-    required double eventLatitude,
-    required double eventLongitude,
+
+  void startUserPositionListener() {
+    if (!widget.showUserMarker) return;
+
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 10,
+    );
+
+    positionSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen((position) async {
+      final newPosition = LatLng(
+        position.latitude,
+        position.longitude,
+      );
+
+      setState(() {
+        currentUserPosition = newPosition;
+      });
+
+      if (isRouteActive && selectedEvent != null) {
+        await updateRouteIfNeeded(newPosition);
+      }
+    });
+  }
+
+  Future<void> updateRouteIfNeeded(LatLng newPosition) async {
+    final event = selectedEvent;
+
+    if (event == null) return;
+
+    final eventLatitudeValue = event['latitude'];
+    final eventLongitudeValue = event['longitude'];
+
+    if (eventLatitudeValue == null || eventLongitudeValue == null) return;
+
+    final now = DateTime.now();
+
+    final shouldUpdateByTime = lastRouteUpdate == null ||
+        now.difference(lastRouteUpdate!).inSeconds >= 15;
+
+    bool shouldUpdateByDistance = true;
+
+    if (lastRouteUserPosition != null) {
+      final distanceMoved = Geolocator.distanceBetween(
+        lastRouteUserPosition!.latitude,
+        lastRouteUserPosition!.longitude,
+        newPosition.latitude,
+        newPosition.longitude,
+      );
+
+      shouldUpdateByDistance = distanceMoved >= 30;
+    }
+
+    if (!shouldUpdateByTime && !shouldUpdateByDistance) return;
+
+    await calculateRouteToEvent(
+      event: event,
+      moveCamera: false,
+      showSuccessMessage: false,
+    );
+  }
+
+  Future<void> calculateRouteToEvent({
+    required Map<String, dynamic> event,
+    bool moveCamera = true,
+    bool showSuccessMessage = true,
   }) async {
+    final userPosition = currentUserPosition;
+
+    if (userPosition == null) {
+      AppSnackbar.show(
+        context,
+        'Localização atual não encontrada.',
+      );
+      return;
+    }
+
+    final eventLatitudeValue = event['latitude'];
+    final eventLongitudeValue = event['longitude'];
+
+    if (eventLatitudeValue == null || eventLongitudeValue == null) {
+      AppSnackbar.show(
+        context,
+        'Evento sem localização.',
+      );
+      return;
+    }
+
+    final eventLatitude = (eventLatitudeValue as num).toDouble();
+    final eventLongitude = (eventLongitudeValue as num).toDouble();
+
     try {
       setState(() {
         isLoadingRoute = true;
+        selectedEvent = event;
       });
 
-      final position = await Geolocator.getCurrentPosition();
-
-      final points = await routeService.getDrivingRoute(
-        startLatitude: position.latitude,
-        startLongitude: position.longitude,
+      final result = await routeService.getDrivingRoute(
+        startLatitude: userPosition.latitude,
+        startLongitude: userPosition.longitude,
         endLatitude: eventLatitude,
         endLongitude: eventLongitude,
       );
@@ -73,11 +197,16 @@ class _RealMapWidgetState extends State<RealMapWidget> {
       if (!mounted) return;
 
       setState(() {
-        routePoints = points;
+        routePoints = result.points;
+        routeDistanceKm = result.distanceKm;
+        routeDurationMinutes = result.durationMinutes;
+        isRouteActive = true;
+        lastRouteUpdate = DateTime.now();
+        lastRouteUserPosition = userPosition;
       });
 
-      if (points.isNotEmpty) {
-        final bounds = LatLngBounds.fromPoints(points);
+      if (moveCamera && result.points.isNotEmpty) {
+        final bounds = LatLngBounds.fromPoints(result.points);
 
         mapController.fitCamera(
           CameraFit.bounds(
@@ -87,16 +216,18 @@ class _RealMapWidgetState extends State<RealMapWidget> {
         );
       }
 
-      AppSnackbar.show(
-        context,
-        'Rota carregada!',
-      );
+      if (showSuccessMessage) {
+        AppSnackbar.show(
+          context,
+          'Rota carregada!',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 
       AppSnackbar.show(
         context,
-        'Não foi possível carregar a rota.',
+        'Não foi possível calcular a rota.',
       );
     } finally {
       if (mounted) {
@@ -107,8 +238,90 @@ class _RealMapWidgetState extends State<RealMapWidget> {
     }
   }
 
+  void clearRoute() {
+    setState(() {
+      selectedEvent = null;
+      routePoints = [];
+      routeDistanceKm = null;
+      routeDurationMinutes = null;
+      isRouteActive = false;
+      lastRouteUpdate = null;
+      lastRouteUserPosition = null;
+    });
+  }
+
+  void openEventDetails(Map<String, dynamic> event) {
+    final latitudeValue = event['latitude'];
+    final longitudeValue = event['longitude'];
+
+    final eventLatitude = latitudeValue == null
+        ? null
+        : (latitudeValue as num).toDouble();
+
+    final eventLongitude = longitudeValue == null
+        ? null
+        : (longitudeValue as num).toDouble();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailsScreen(
+          eventId: event['id'],
+          title: event['title'] ?? 'Sem título',
+          location: event['location'] ?? 'Local não informado',
+          date: event['date'] ?? 'Data não informada',
+          time: event['time'] ?? 'Horário não informado',
+          category: event['category'] ?? 'Evento',
+          description: event['description'] ?? '',
+          latitude: eventLatitude,
+          longitude: eventLongitude,
+          creatorName: event['creatorNickname'] ??
+              event['creatorEmail'] ??
+              'Criador não informado',
+        ),
+      ),
+    );
+  }
+
+  String get routeTimeText {
+    final minutes = routeDurationMinutes;
+
+    if (minutes == null) return '-- min';
+
+    if (minutes < 60) {
+      return '${minutes.round()} min';
+    }
+
+    final hours = minutes ~/ 60;
+    final remainingMinutes = (minutes % 60).round();
+
+    if (remainingMinutes == 0) {
+      return '${hours}h';
+    }
+
+    return '${hours}h ${remainingMinutes}min';
+  }
+
+  String get routeDistanceText {
+    final distance = routeDistanceKm;
+
+    if (distance == null) return '-- km';
+
+    if (distance < 1) {
+      return '${(distance * 1000).round()} m';
+    }
+
+    return '${distance.toStringAsFixed(1)} km';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final userPosition = currentUserPosition ??
+        LatLng(
+          widget.latitude,
+          widget.longitude,
+        );
+
     return Stack(
       children: [
         FlutterMap(
@@ -135,24 +348,23 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                   'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
               userAgentPackageName: 'com.nightpoint.app',
             ),
+
             if (routePoints.isNotEmpty)
-            PolylineLayer(
-              polylines: [
-                Polyline(
-                  points: routePoints,
-                  strokeWidth: 5,
-                  color: AppColors.primary,
-                ),
-              ],
-            ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: routePoints,
+                    strokeWidth: 5,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+
             MarkerLayer(
               markers: [
                 if (widget.showUserMarker)
                   Marker(
-                    point: LatLng(
-                      widget.latitude,
-                      widget.longitude,
-                    ),
+                    point: userPosition,
                     width: 60,
                     height: 60,
                     child: Transform.rotate(
@@ -186,23 +398,7 @@ class _RealMapWidgetState extends State<RealMapWidget> {
                     height: _getMarkerHeight(),
                     child: GestureDetector(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => EventDetailsScreen(
-                            eventId: event['id'],
-                            title: event['title'] ?? 'Sem título',
-                            location: event['location'] ?? 'Local não informado',
-                            date: event['date'] ?? 'Data não informada',
-                            time: event['time'] ?? 'Horário não informado',
-                            category: event['category'] ?? 'Evento',
-                            description: event['description'] ?? '',
-                            latitude: eventLatitude,
-                            longitude: eventLongitude,
-                            creatorName: event['creatorNickname'] ?? event['creatorEmail'] ?? 'Criador não informado',
-                          ),
-                          ),
-                        );
+                        calculateRouteToEvent(event: event);
                       },
                       child: _buildEventMarker(
                         event['title'] ?? 'Evento',
@@ -240,34 +436,160 @@ class _RealMapWidgetState extends State<RealMapWidget> {
             ),
           ),
         ),
-        if (widget.events.length == 1 &&
-            widget.events.first['latitude'] != null &&
-            widget.events.first['longitude'] != null)
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: FloatingActionButton.extended(
-              heroTag: 'route_button_${widget.events.first['id'] ?? 'event'}',
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.background,
-              onPressed: isLoadingRoute
-                  ? null
-                  : () {
-                      final eventLatitude =
-                          (widget.events.first['latitude'] as num).toDouble();
-                      final eventLongitude =
-                          (widget.events.first['longitude'] as num).toDouble();
 
-                      showRouteToEvent(
-                        eventLatitude: eventLatitude,
-                        eventLongitude: eventLongitude,
-                      );
-                    },
-              icon: Icon(
-                isLoadingRoute ? Icons.hourglass_empty : Icons.route,
+        if (selectedEvent != null)
+          Positioned(
+            top: 96,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.background.withOpacity(0.96),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppColors.primary,
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
-              label: Text(
-                isLoadingRoute ? 'Calculando...' : 'Rota',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.route,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Rota até o encontro',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+
+                            const SizedBox(height: 2),
+
+                            Text(
+                              selectedEvent!['title'] ?? 'Evento selecionado',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: clearRoute,
+                        icon: const Icon(
+                          Icons.close,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withOpacity(0.78),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isLoadingRoute
+                              ? Icons.hourglass_empty
+                              : Icons.near_me,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        Expanded(
+                          child: Text(
+                            isLoadingRoute
+                                ? 'Calculando rota...'
+                                : '$routeDistanceText • $routeTimeText estimado',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        openEventDetails(selectedEvent!);
+                      },
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Ver detalhes do encontro'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(
+                          color: AppColors.primary,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -442,7 +764,7 @@ class _RealMapWidgetState extends State<RealMapWidget> {
           const SizedBox(height: 5),
 
           const Text(
-            'Toque para abrir',
+            'Toque para rota',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
