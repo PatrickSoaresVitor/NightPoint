@@ -91,7 +91,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.nightpoint.app',
               ),
 
@@ -140,7 +141,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
               child: const Text(
-                'Toque no mapa para escolher o local do encontro.',
+                'Confira o endereço, ajuste o ponto no mapa e confirme o local.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.textPrimary,

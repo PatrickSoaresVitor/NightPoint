@@ -11,6 +11,7 @@ import '../../utils/app_snackbar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_input.dart';
 import '../location_picker/location_picker_screen.dart';
+import '../../services/address_search_service.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -33,15 +34,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final timeController = TextEditingController();
   final descriptionController = TextEditingController();
   final dateController = TextEditingController();
+  
 
   final eventService = EventService();
   final aiService = AiService();
+  final addressSearchService = AddressSearchService();
 
   String category = 'Street';
 
   bool isLoading = false;
   bool isGeneratingDescription = false;
   bool isGeneratingCompleteEvent = false;
+  bool isSearchingAddress = false;
 
   double? latitude;
   double? longitude;
@@ -54,6 +58,153 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     longitude = widget.initialLongitude;
   }
 
+  Future<void> searchAddressAndSelectLocation() async {
+    if (locationController.text.trim().isEmpty) {
+      AppSnackbar.show(
+        context,
+        'Digite um endereço ou nome de local para buscar.',
+      );
+      return;
+    }
+
+    try {
+      setState(() {
+        isSearchingAddress = true;
+      });
+
+      double? userLatitude = latitude ?? widget.initialLatitude;
+      double? userLongitude = longitude ?? widget.initialLongitude;
+
+      if (userLatitude == null || userLongitude == null) {
+        try {
+          final position = await LocationService.getCurrentPosition();
+
+          userLatitude = position.latitude;
+          userLongitude = position.longitude;
+        } catch (_) {}
+      }
+
+      final results = await addressSearchService.searchAddresses(
+        query: locationController.text.trim(),
+        userLatitude: userLatitude,
+        userLongitude: userLongitude,
+      );
+
+      if (!mounted) return;
+
+      final selectedResult = await showModalBottomSheet<AddressSearchResult>(
+        context: context,
+        backgroundColor: AppColors.background,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Escolha o endereço correto',
+                    style: AppTextStyles.title.copyWith(
+                      fontSize: 22,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: results.length,
+                      separatorBuilder: (_, __) => const Divider(
+                        color: AppColors.border,
+                      ),
+                      itemBuilder: (context, index) {
+                        final result = results[index];
+
+                        final distanceText = result.distanceKm == null
+                            ? null
+                            : result.distanceKm! < 1
+                                ? '${(result.distanceKm! * 1000).round()} m'
+                                : '${result.distanceKm!.toStringAsFixed(1)} km';
+
+                        return ListTile(
+                          leading: const Icon(
+                            Icons.location_on,
+                            color: AppColors.primary,
+                          ),
+                          title: Text(
+                            result.displayName,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: distanceText == null
+                              ? null
+                              : Text(
+                                  'Aprox. $distanceText de você',
+                                  style: AppTextStyles.subtitle,
+                                ),
+                          onTap: () {
+                            Navigator.pop(context, result);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (selectedResult == null) return;
+
+      final selectedPosition = await Navigator.push<LatLng>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LocationPickerScreen(
+            initialLatitude: selectedResult.position.latitude,
+            initialLongitude: selectedResult.position.longitude,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      final finalPosition = selectedPosition ?? selectedResult.position;
+
+      setState(() {
+        latitude = finalPosition.latitude;
+        longitude = finalPosition.longitude;
+        locationController.text = selectedResult.displayName;
+      });
+
+      AppSnackbar.show(
+        context,
+        'Local do encontro definido pelo endereço!',
+      );
+    } catch (e) {
+      AppSnackbar.show(
+        context,
+        e.toString(),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSearchingAddress = false;
+        });
+      }
+    }
+  }
   Future<void> getEventLocation() async {
     try {
       final position = await LocationService.getCurrentPosition();
@@ -135,7 +286,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       setState(() {
         titleController.text = generatedEvent['title'] ?? '';
         locationController.text = generatedEvent['location'] ?? '';
-        timeController.text = generatedEvent['time'] ?? '';
+        //timeController.text = generatedEvent['time'] ?? ''; desativado
         descriptionController.text = generatedEvent['description'] ?? '';
 
         final generatedCategory = generatedEvent['category'] ?? 'Street';
@@ -215,7 +366,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     }
   }
-
   Future<bool> confirmSafetyAnalysis(String analysis) async {
     final lowerAnalysis = analysis.toLowerCase();
 
@@ -388,7 +538,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final selectedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(
+        const Duration(days: 365),
+      ),
       lastDate: DateTime.now().add(
         const Duration(days: 365),
       ),
@@ -502,6 +654,26 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               controller: locationController,
             ),
 
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: isSearchingAddress ? null : searchAddressAndSelectLocation,
+              icon: Icon(
+                isSearchingAddress ? Icons.hourglass_empty : Icons.search,
+              ),
+              label: Text(
+                isSearchingAddress ? 'Buscando endereço...' : 'Buscar endereço no mapa',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(
+                  color: AppColors.primary,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 16),
 
             GestureDetector(
@@ -603,24 +775,57 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             OutlinedButton.icon(
               onPressed: chooseLocationOnMap,
               icon: Icon(
-                hasLocation ? Icons.check_circle : Icons.map,
+                hasLocation ? Icons.edit_location_alt : Icons.map,
               ),
               label: Text(
                 hasLocation
-                    ? 'Local do encontro selecionado'
-                    : 'Escolher local no mapa',
+                    ? 'Ajustar local manualmente no mapa'
+                    : 'Escolher local manualmente no mapa',
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor:
-                    hasLocation ? AppColors.accent : AppColors.primary,
-                side: BorderSide(
-                  color: hasLocation ? AppColors.accent : AppColors.primary,
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(
+                  color: AppColors.primary,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
               ),
             ),
+
+            if (hasLocation) ...[
+              const SizedBox(height: 10),
+
+              Container(
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.accent,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: AppColors.accent,
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Local do encontro selecionado',
+                      style: TextStyle(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 
